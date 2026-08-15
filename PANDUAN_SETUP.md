@@ -1,294 +1,127 @@
-# Panduan Setup — Kantin Uimsya Putri
+# PANDUAN SETUP — Kantin Uimsya Putri Profesional
 
-## 1. Struktur file
+Versi ini mengembangkan aplikasi menjadi sistem keuangan kantin yang lebih umum, sambil mempertahankan modul khusus kantin.
 
-Salin file berikut ke root project Netlify:
+## 1. Isi folder
 
-- `index.html` — halaman login milik Anda.
-- `supabase.js` — koneksi Supabase milik Anda.
+Pastikan root repository berisi:
+
+- `index.html`
 - `app.html`
 - `app.js`
-- `style.css`
 - `home.js`
+- `style.css`
+- `supabase.js`
 - `netlify.toml`
-- folder `assets/` berisi `logo.png`
+- `database.sql`
+- `assets/logo.png`
 
-Project ini tidak membutuhkan npm, framework, atau proses build. Netlify cukup menerbitkan folder root sebagai publish directory. Netlify memang hanya menerbitkan file yang berada di publish directory.
+Tidak ada framework dan tidak ada build command.
 
-## 2. Supabase: buat project
+## 2. Supabase
 
-1. Buka Supabase.
-2. Buat project baru.
-3. Catat `Project URL` dan `anon/public key`.
-4. Masukkan kedua nilai tersebut di `supabase.js`.
-5. Jangan pernah memasukkan `service_role key` ke frontend.
+Buka Supabase > SQL Editor lalu jalankan seluruh isi `database.sql`.
 
-Contoh `supabase.js` yang kompatibel dengan project ini:
+Tabel utama tetap `kantin_data`. Aplikasi menggunakan `tipe` berikut:
 
-```js
-const SUPABASE_URL = 'https://PROJECT-ID.supabase.co';
-const SUPABASE_ANON_KEY = 'YOUR_ANON_KEY';
-const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-```
+- `harian`
+- `pemasukan`
+- `pengeluaran`
+- `transfer`
+- `setoran_tabungan`
+- `penarikan`
+- `piutang`
+- `pembayaran_piutang`
+- `hutang`
+- `pembayaran_hutang`
+- `persediaan`
+- `pemasok`
 
-Bila file Anda memakai nama variabel lain, buat alias global:
+Semua detail transaksi disimpan pada kolom `data` (jsonb).
 
-```js
-window.supabaseClient = supabaseClient;
-```
+## 3. Auth user pertama
 
-> `app.js` mencoba memakai `window.supabaseClient` terlebih dahulu, lalu `window.supabase`.
+Supabase > Authentication > Users > Add user.
 
-## 3. Supabase Auth untuk login username + password
+Untuk username `admin`, buat email internal:
 
-Untuk keamanan, aplikasi ini memakai **Supabase Auth** sebagai pemilik password dan sesi. Tabel `kantin_users` berfungsi sebagai tabel profil/metadata username, bukan tempat menyimpan password asli.
+`admin@kantin-uimsya.local`
 
-Login username diubah menjadi email internal deterministik:
+Pengguna pada halaman login cukup mengetik username `admin`; email internal tersebut dibuat otomatis oleh `index.html`.
 
-```text
-username -> username@kantin-uimsya.local
-```
+Jangan masukkan service-role key ke frontend.
 
-Ini membuat form login Anda tetap memakai username + password tanpa menyimpan password sendiri di database.
+## 4. supabase.js
 
-Di Supabase Dashboard:
-
-1. Buka **Authentication → Users**.
-2. Tambahkan user secara manual.
-3. Gunakan email internal seperti `admin@kantin-uimsya.local`.
-4. Masukkan password awal.
-5. Nonaktifkan kebutuhan konfirmasi email untuk skenario internal ini, sesuai pengaturan Auth project Anda.
-
-> Jika halaman login Anda yang sekarang sudah menggunakan Supabase Auth, cukup pastikan email yang dipakai saat `signInWithPassword()` dibentuk dari username dengan pola yang sama.
-
-## 4. SQL tabel utama
-
-Jalankan SQL berikut di **SQL Editor**:
-
-```sql
-create extension if not exists pgcrypto;
-
-create table if not exists public.kantin_data (
-  id uuid default gen_random_uuid() primary key,
-  record_id text unique not null,
-  tipe text not null check (tipe in ('harian','pengeluaran','penarikan')),
-  tgl text not null,
-  data jsonb not null,
-  updated_at timestamptz default now()
-);
-
-create table if not exists public.kantin_users (
-  id uuid default gen_random_uuid() primary key,
-  username text unique not null,
-  password_hash text not null,
-  created_at timestamptz default now()
-);
-
-create index if not exists idx_kantin_data_tipe_tgl on public.kantin_data(tipe,tgl);
-```
-
-### Isi awal tabel `kantin_users`
-
-Karena password dikelola Supabase Auth, Anda dapat mengisi kolom hash dengan penanda:
-
-```sql
-insert into public.kantin_users (username, password_hash)
-values ('admin', 'SUPABASE_AUTH')
-on conflict (username) do nothing;
-```
-
-## 5. RLS yang disarankan
-
-Karena `app.js` memakai Supabase Auth, aktifkan RLS:
-
-```sql
-alter table public.kantin_data enable row level security;
-alter table public.kantin_users enable row level security;
-
-create policy "auth users can read kantin data"
-on public.kantin_data for select
-to authenticated
-using (true);
-
-create policy "auth users can insert kantin data"
-on public.kantin_data for insert
-to authenticated
-with check (true);
-
-create policy "auth users can update kantin data"
-on public.kantin_data for update
-to authenticated
-using (true)
-with check (true);
-
-create policy "auth users can delete kantin data"
-on public.kantin_data for delete
-to authenticated
-using (true);
-
-create policy "auth users can read usernames"
-on public.kantin_users for select
-to authenticated
-using (true);
-```
-
-Kebijakan di atas cocok untuk aplikasi internal satu tim yang seluruh akun Auth-nya memang boleh melihat data kantin. Bila nanti ada beberapa unit dengan hak akses berbeda, tambahkan kolom `owner_id`/`unit_id` dan ubah policy agar setiap user hanya melihat datanya sendiri.
-
-## 6. Sesuaikan halaman login yang sudah ada
-
-Halaman `index.html` Anda harus melakukan login Supabase Auth. Pola dasarnya:
+File sudah diisi dengan Project URL dan Publishable key yang diberikan untuk project ini. Bila project berbeda, ubah dua konstanta:
 
 ```js
-const username = document.querySelector('#username').value.trim();
-const password = document.querySelector('#password').value;
-const email = `${username.toLowerCase().replace(/[^a-z0-9._-]/g, '')}@kantin-uimsya.local`;
-
-const { error } = await supabaseClient.auth.signInWithPassword({
-  email,
-  password
-});
-
-if (error) throw error;
-location.href = 'app.html';
+const SUPABASE_URL = 'https://PROJECT.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_...';
 ```
 
-Setelah login berhasil, Supabase menyimpan sesi di browser. `app.js` memeriksa sesi tersebut sebelum membuka aplikasi.
+Gunakan Publishable/anon key, bukan service_role.
 
-## 7. Data yang disimpan
+## 5. Login
 
-### Laporan harian
+Buka root site, bukan `/app.html` langsung.
 
-`tipe = 'harian'`
+Alur:
 
-```json
-{
-  "pend1": 100000,
-  "pend2": 50000,
-  "titip1": 10000,
-  "titip2": 5000,
-  "titip3": 0,
-  "tabungan": 20000
-}
-```
+`index.html -> Supabase Auth -> app.html`
+
+Jika tidak ada session, `app.html` akan mengembalikan pengguna ke `index.html`.
+
+## 6. Fitur keuangan yang ditambahkan
+
+- Dashboard 1 bulan, 3 bulan, 6 bulan, 1 tahun, 2 tahun
+- Transaksi kas: pemasukan, pengeluaran, transfer, setoran tabungan, penarikan
+- Buku kas dengan saldo awal dan saldo akhir
+- Laba rugi operasional
+- Piutang dan pembayaran piutang
+- Hutang dan pembayaran hutang
+- Persediaan/stok
+- Master pemasok
+- Tabungan + penarikan
+- Laporan harian khusus kantin
+- CSV
+- Cetak B5
+- Ganti password
+- Reset seluruh data (gunakan hati-hati)
+
+## 7. Laporan harian kantin
 
 Rumus:
 
-```text
-Total = (Pend.I + Pend.II) - Titipan I - Titipan II - Titipan III - Tabungan
-```
+`Total = (Pend.I + Pend.II) - Titipan I - Titipan II - Titipan III - Tabungan`
 
-### Pengeluaran
+Jumat otomatis libur pada modul operasional laporan harian, pengeluaran, dan penarikan.
 
-`tipe = 'pengeluaran'`
+## 8. Buku kas
 
-```json
-{
-  "nominal": 25000,
-  "keterangan": "Belanja bahan baku"
-}
-```
+Saldo awal dapat diisi pada halaman Buku Kas. Nilai saldo awal disimpan di browser untuk perangkat tersebut.
 
-### Penarikan tabungan
+Arus harian berasal dari `harian` sebagai net harian, kemudian ditambah pemasukan lain, dikurangi pengeluaran dan setoran tabungan, serta ditambah penarikan tabungan.
 
-`tipe = 'penarikan'`
+## 9. Deploy Netlify
 
-```json
-{
-  "nominal": 100000,
-  "keterangan": "Penarikan kas"
-}
-```
+GitHub repository harus memiliki `index.html` di root.
 
-## 8. Aturan Jumat
+Di Netlify:
 
-Aplikasi menganggap Jumat sebagai hari libur otomatis berdasarkan `Date.getDay() === 5`.
+- Import project dari GitHub
+- Branch: `main`
+- Build command: kosong
+- Publish directory: `.`
 
-Pada Jumat:
+Setelah deploy, gunakan URL `https://....netlify.app/`.
 
-- form laporan harian dinonaktifkan;
-- pengeluaran dinonaktifkan;
-- penarikan tabungan dinonaktifkan;
-- tombol simpan menolak transaksi;
-- dashboard tetap dapat melihat data Jumat lama bila memang ada.
+## 10. Update aplikasi
 
-## 9. Cetak B5
+Edit file di komputer -> upload/commit ke GitHub -> Netlify otomatis deploy ulang.
 
-Tombol **Cetak B5** memanggil `window.print()`. CSS sudah menyertakan:
+## 11. Catatan keamanan
 
-```css
-@page { size: B5 portrait; margin: 10mm; }
-```
+`supabase.js` berada di frontend sehingga hanya boleh berisi Publishable/anon key. Service-role key tidak boleh di-upload ke GitHub atau dimasukkan ke browser.
 
-Saat print, elemen navigasi dan kontrol aplikasi disembunyikan sehingga halaman laporan lebih bersih.
-
-## 10. Ekspor CSV
-
-Halaman Ekspor menyediakan:
-
-- Semua data
-- Laporan harian
-- Pengeluaran
-- Penarikan
-
-File CSV memakai UTF-8 BOM agar karakter Indonesia lebih aman dibuka di Excel.
-
-## 11. Dashboard
-
-Pilihan periode:
-
-- 1 bulan
-- 3 bulan
-- 6 bulan
-- 1 tahun
-- 2 tahun
-
-Dashboard menghitung pendapatan, titipan, tabungan, pengeluaran, penarikan, dan arus bersih per bulan langsung dari data Supabase.
-
-## 12. Deploy ke Netlify
-
-### Cara paling mudah: GitHub
-
-1. Buat repository GitHub baru.
-2. Upload seluruh isi project.
-3. Masuk Netlify.
-4. Pilih **Add new site → Import an existing project**.
-5. Pilih repository GitHub.
-6. Karena project ini vanilla static, build command dapat dikosongkan dan publish directory adalah `.`.
-7. Deploy.
-
-`netlify.toml` sudah menyediakan publish directory dan redirect `/app` → `app.html`. Netlify mendukung konfigurasi redirect melalui `netlify.toml`.
-
-### Deploy manual
-
-Anda juga dapat drag-and-drop folder project ke Netlify. Pastikan file `index.html`, `app.html`, `supabase.js`, `app.js`, `home.js`, `style.css`, `netlify.toml`, dan `assets/logo.png` ikut ter-upload.
-
-## 13. Pengaturan keamanan Netlify
-
-Supabase URL dan anon key boleh berada di frontend karena memang public client credential. Jangan menyimpan:
-
-- `service_role key`
-- password database PostgreSQL
-- token admin
-- credential API rahasia
-
-Netlify menyarankan environment variable rahasia disimpan di UI/konfigurasi environment, bukan dimasukkan ke repository.
-
-## 14. Checklist setelah deploy
-
-- [ ] `index.html` membuka tanpa 404.
-- [ ] Login username/password berhasil.
-- [ ] Setelah login diarahkan ke `app.html`.
-- [ ] Data laporan dapat disimpan.
-- [ ] Pengeluaran dapat disimpan.
-- [ ] Penarikan dapat disimpan.
-- [ ] Dashboard menampilkan ringkasan.
-- [ ] Ekspor CSV terunduh.
-- [ ] Cetak menghasilkan ukuran B5.
-- [ ] Jumat menolak transaksi baru.
-- [ ] Tombol Keluar menghapus sesi dan kembali ke login.
-
-## 15. Catatan penting untuk pengembangan berikutnya
-
-Implementasi ini sengaja dibuat sebagai aplikasi satu unit internal: semua user Auth yang lolos RLS dapat mengakses tabel `kantin_data`. Untuk aplikasi multi-unit atau hak akses kasir/admin, tambahkan `auth_user_id` atau `unit_id` ke `kantin_data` dan gunakan RLS berbasis `auth.uid()`.
-
-Netlify tidak memerlukan server Node untuk project ini. `netlify.toml` hanya mengatur publish directory dan routing.
+Tabel `kantin_users` dipertahankan untuk kompatibilitas; password ditangani oleh Supabase Auth.

@@ -1,2 +1,4 @@
-Masukkan logo kantin Anda di folder ini dengan nama:
-logo.png
+Letakkan logo Anda di file:
+assets/logo.png
+
+Halaman login dan aplikasi sudah memakai path tersebut.
