@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Login — Kantin Uimsya Putri</title>
+  <meta name="theme-color" content="#011f4b">
+  <style>
+    :root{--n1:#011f4b;--n2:#03396c;--b:#005b96;--s:#6497b1;--m:#b3cde0}
+    *{box-sizing:border-box}html,body{margin:0;min-height:100%;font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;color:#f7fbff}
+    body{min-height:100vh;display:grid;place-items:center;overflow:hidden;background:radial-gradient(circle at 15% 20%,rgba(179,205,224,.18),transparent 32%),radial-gradient(circle at 85% 80%,rgba(100,151,177,.16),transparent 34%),linear-gradient(135deg,var(--n1),var(--n2) 52%,var(--b))}
+    .page{width:min(92vw,430px);position:relative;z-index:1}.login-card{padding:34px 30px 28px;border:1px solid rgba(255,255,255,.24);border-radius:28px;background:linear-gradient(145deg,rgba(255,255,255,.16),rgba(255,255,255,.08));box-shadow:0 24px 60px rgba(0,0,0,.28);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)}
+    .logo-wrap{width:96px;height:96px;margin:0 auto 18px;display:grid;place-items:center;border-radius:24px;padding:9px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.22)}.logo{width:100%;height:100%;object-fit:contain;border-radius:18px}.logo-fallback{font-size:42px;display:none}
+    h1{margin:0;text-align:center;font-size:clamp(25px,6vw,32px);line-height:1.15;letter-spacing:-.03em}.subtitle{margin:10px 0 26px;text-align:center;color:var(--m);font-size:14px}
+    .field{margin-bottom:16px}.field label{display:block;margin-bottom:8px;font-size:13px;font-weight:700;color:#dbeafe}.input-wrap{position:relative}
+    input{width:100%;border:1px solid rgba(255,255,255,.24);outline:0;border-radius:14px;padding:14px 15px;background:rgba(255,255,255,.10);color:#fff;font-size:15px}input::placeholder{color:rgba(255,255,255,.58)}input:focus{border-color:var(--m);box-shadow:0 0 0 4px rgba(179,205,224,.12);background:rgba(255,255,255,.14)}
+    .toggle-password{position:absolute;top:50%;right:8px;transform:translateY(-50%);border:0;background:transparent;color:var(--m);cursor:pointer;padding:8px;font-size:15px}
+    .login-btn{width:100%;border:1px solid rgba(255,255,255,.20);border-radius:14px;padding:14px 16px;margin-top:8px;background:linear-gradient(135deg,var(--b),var(--n2));color:#fff;font-size:15px;font-weight:800;cursor:pointer;box-shadow:0 12px 28px rgba(0,0,0,.18);transition:.18s}.login-btn:hover{transform:translateY(-1px);filter:brightness(1.08)}.login-btn:disabled{opacity:.65;cursor:not-allowed;transform:none}
+    .message{display:none;margin-top:14px;padding:11px 12px;border-radius:12px;font-size:13px;line-height:1.45}.message.error{display:block;color:#fecaca;background:rgba(127,29,29,.35);border:1px solid rgba(254,202,202,.18)}.footer{margin-top:18px;text-align:center;color:rgba(255,255,255,.55);font-size:12px}
+    @media(max-width:480px){.login-card{padding:28px 20px 22px;border-radius:22px}}
+  </style>
+</head>
+<body>
+  <main class="page"><section class="login-card">
+    <div class="logo-wrap"><img class="logo" src="assets/logo.png" alt="Logo Kantin Uimsya Putri" onerror="this.style.display='none';document.querySelector('.logo-fallback').style.display='block'"><span class="logo-fallback">🏪</span></div>
+    <h1>Kantin Uimsya Putri</h1><p class="subtitle">Laporan Keuangan Harian Kantin</p>
+    <form id="loginForm" novalidate>
+      <div class="field"><label for="username">Username</label><input id="username" name="username" type="text" autocomplete="username" placeholder="Masukkan username" required></div>
+      <div class="field"><label for="password">Password</label><div class="input-wrap"><input id="password" name="password" type="password" autocomplete="current-password" placeholder="Masukkan password" required><button type="button" class="toggle-password" id="togglePassword">👁</button></div></div>
+      <button type="submit" class="login-btn" id="loginBtn">Masuk</button><div class="message" id="loginMessage" role="alert"></div>
+    </form>
+    <div class="footer">Akses melalui HP maupun PC</div>
+  </section></main>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase.js"></script>
+  <script>
+    (async function(){
+      const form=document.getElementById('loginForm'),u=document.getElementById('username'),p=document.getElementById('password'),btn=document.getElementById('loginBtn'),msg=document.getElementById('loginMessage'),toggle=document.getElementById('togglePassword');
+      const show=t=>{msg.textContent=t;msg.className='message error'},clear=()=>{msg.textContent='';msg.className='message'};
+      toggle.addEventListener('click',()=>{const hide=p.type==='password';p.type=hide?'text':'password';toggle.textContent=hide?'🙈':'👁'});
+      try{const {data:{session}}=await supabaseClient.auth.getSession();if(session){location.href='app.html';return}}catch(e){console.warn(e)}
+      form.addEventListener('submit',async e=>{e.preventDefault();clear();const username=u.value.trim(),password=p.value;if(!username||!password){show('Username dan password wajib diisi.');return}
+        const sanitized=username.toLowerCase().replace(/[^a-z0-9._-]/g,'');if(!sanitized){show('Username tidak valid.');return}const email=`${sanitized}@kantin-uimsya.local`;
+        btn.disabled=true;btn.textContent='Memeriksa...';try{const {error}=await supabaseClient.auth.signInWithPassword({email,password});if(error){console.error(error);show('Login gagal. Periksa username dan password Anda.');return}location.href='app.html'}catch(err){console.error(err);show('Terjadi kesalahan koneksi. Periksa koneksi internet Anda.')}finally{btn.disabled=false;btn.textContent='Masuk'}});
+    })();
+  </script>
+</body>
+</html>

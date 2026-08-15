@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#011f4b" />
+  <title>Kantin Uimsya Putri — Keuangan</title>
+  <link rel="icon" href="assets/logo.png" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="ambient ambient-1"></div><div class="ambient ambient-2"></div>
+  <header class="topbar glass">
+    <div class="brand" data-tab="home">
+      <img src="assets/logo.png" alt="Logo" onerror="this.style.display='none'" />
+      <div><strong>Kantin Uimsya Putri</strong><small>Laporan Keuangan</small></div>
+    </div>
+    <div class="top-actions">
+      <span id="clockMini" class="clock-mini">--:--:--</span>
+      <button id="logoutBtn" class="btn btn-danger btn-sm">Keluar</button>
+    </div>
+  </header>
+
+  <main class="app-shell">
+    <section id="tab-home" class="tab-page active">
+      <div class="hero glass">
+        <div>
+          <span class="eyebrow">BERANDA</span>
+          <h1 id="greetingTitle">Selamat datang 👋</h1>
+          <p id="greetingText">Semoga hari ini dimudahkan dan dilancarkan.</p>
+          <div class="hero-time" id="heroTime">00:00:00</div>
+          <div id="dailyStatus" class="status-pill">Memuat status hari...</div>
+        </div>
+        <div class="hero-logo"><img src="assets/logo.png" alt="Kantin Uimsya Putri" onerror="this.style.opacity='0.2'" /></div>
+      </div>
+
+      <div class="quote glass" id="motivationText">“Sedikit demi sedikit, pencatatan yang rapi membuat keuangan lebih mudah dijaga.”</div>
+
+      <div class="bubble-nav">
+        <button class="bubble" data-tab="daily"><span>📒</span><b>Laporan</b></button>
+        <button class="bubble" data-tab="expense"><span>💸</span><b>Pengeluaran</b></button>
+        <button class="bubble" data-tab="saving"><span>💰</span><b>Tabungan</b></button>
+        <button class="bubble" data-tab="dashboard"><span>📊</span><b>Dashboard</b></button>
+        <button class="bubble" data-tab="export"><span>📤</span><b>Ekspor</b></button>
+      </div>
+
+      <div class="summary-grid" id="homeSummary"></div>
+    </section>
+
+    <section id="tab-daily" class="tab-page">
+      <div class="section-head"><div><span class="eyebrow">LAPORAN HARIAN</span><h2>Catat pendapatan & titipan</h2></div><button class="btn btn-outline" id="printDailyBtn">🖨 Cetak B5</button></div>
+      <div class="glass card">
+        <div class="form-grid">
+          <label>Tanggal<input type="date" id="dailyDate" /></label>
+          <label>Pendapatan I<input type="number" id="pend1" min="0" step="1" inputmode="numeric" /></label>
+          <label>Pendapatan II<input type="number" id="pend2" min="0" step="1" inputmode="numeric" /></label>
+          <label>Titipan I<input type="number" id="titip1" min="0" step="1" /></label>
+          <label>Titipan II<input type="number" id="titip2" min="0" step="1" /></label>
+          <label>Titipan III<input type="number" id="titip3" min="0" step="1" /></label>
+          <label>Tabungan<input type="number" id="dailySaving" min="0" step="1" /></label>
+        </div>
+        <div class="total-box"><div><small>Total bersih hari ini</small><strong id="dailyTotal">Rp0</strong></div><span id="fridayNote">Jumat otomatis libur</span></div>
+        <div class="actions"><button class="btn btn-primary" id="saveDailyBtn">Simpan Laporan</button><button class="btn btn-muted" id="clearDailyBtn">Reset</button></div>
+      </div>
+      <div class="glass card"><div class="table-title"><h3>Riwayat laporan</h3><input id="dailySearch" class="search" placeholder="Cari tanggal..." /></div><div class="table-wrap"><table id="dailyTable"><thead><tr><th>Tanggal</th><th>Pend.I</th><th>Pend.II</th><th>Tit.I</th><th>Tit.II</th><th>Tit.III</th><th>Tabungan</th><th>Total</th><th></th></tr></thead><tbody></tbody></table></div></div>
+    </section>
+
+    <section id="tab-expense" class="tab-page">
+      <div class="section-head"><div><span class="eyebrow">PENGELUARAN</span><h2>Catat pengeluaran harian</h2></div></div>
+      <div class="glass card"><div class="form-grid"><label>Tanggal<input type="date" id="expenseDate" /></label><label>Nominal<input type="number" id="expenseAmount" min="0" step="1" /></label><label class="span-2">Keterangan<input type="text" id="expenseNote" maxlength="120" placeholder="Contoh: belanja bahan baku" /></label></div><div class="actions"><button class="btn btn-primary" id="saveExpenseBtn">Simpan Pengeluaran</button></div></div>
+      <div class="glass card"><div class="table-wrap"><table id="expenseTable"><thead><tr><th>Tanggal</th><th>Keterangan</th><th>Nominal</th><th></th></tr></thead><tbody></tbody></table></div></div>
+    </section>
+
+    <section id="tab-saving" class="tab-page">
+      <div class="section-head"><div><span class="eyebrow">TABUNGAN</span><h2>Setoran & penarikan tabungan</h2></div></div>
+      <div class="metrics-row"><div class="metric glass"><small>Total setoran</small><strong id="savingInTotal">Rp0</strong></div><div class="metric glass"><small>Total penarikan</small><strong id="savingOutTotal">Rp0</strong></div><div class="metric glass"><small>Saldo tabungan</small><strong id="savingBalance">Rp0</strong></div></div>
+      <div class="glass card"><h3>Catat penarikan</h3><div class="form-grid"><label>Tanggal<input type="date" id="withdrawDate" /></label><label>Nominal<input type="number" id="withdrawAmount" min="0" step="1" /></label><label class="span-2">Keterangan<input type="text" id="withdrawNote" maxlength="120" /></label></div><div class="actions"><button class="btn btn-primary" id="saveWithdrawBtn">Simpan Penarikan</button></div></div>
+      <div class="glass card"><div class="table-wrap"><table id="savingTable"><thead><tr><th>Tanggal</th><th>Jenis</th><th>Keterangan</th><th>Nominal</th><th></th></tr></thead><tbody></tbody></table></div></div>
+    </section>
+
+    <section id="tab-dashboard" class="tab-page">
+      <div class="section-head"><div><span class="eyebrow">DASHBOARD</span><h2>Ringkasan performa</h2></div><div class="segmented"><button class="seg active" data-period="1">1 Bln</button><button class="seg" data-period="3">3 Bln</button><button class="seg" data-period="6">6 Bln</button><button class="seg" data-period="12">1 Thn</button><button class="seg" data-period="24">2 Thn</button></div></div>
+      <div class="metrics-row" id="dashboardMetrics"></div>
+      <div class="dashboard-grid"><div class="glass card"><div class="chart-title"><h3>Pendapatan bersih per bulan</h3></div><canvas id="monthlyChart" height="230"></canvas></div><div class="glass card"><h3>Ringkasan periode</h3><div id="periodSummary" class="summary-list"></div></div></div>
+      <div class="glass card"><div class="table-wrap"><table id="monthlyTable"><thead><tr><th>Bulan</th><th>Pendapatan</th><th>Titipan</th><th>Tabungan</th><th>Pengeluaran</th><th>Penarikan</th><th>Total Bersih</th></tr></thead><tbody></tbody></table></div></div>
+    </section>
+
+    <section id="tab-export" class="tab-page">
+      <div class="section-head"><div><span class="eyebrow">EKSPOR</span><h2>Cadangkan & cetak data</h2></div></div>
+      <div class="export-grid"><div class="glass card"><h3>Ekspor CSV</h3><p class="muted">Unduh data laporan, pengeluaran, atau penarikan dalam format CSV.</p><select id="exportType"><option value="all">Semua data</option><option value="harian">Laporan harian</option><option value="pengeluaran">Pengeluaran</option><option value="penarikan">Penarikan</option></select><button class="btn btn-primary full" id="exportCsvBtn">⬇ Ekspor CSV</button></div>
+      <div class="glass card"><h3>Ganti Password</h3><p class="muted">Password dikelola melalui Supabase Auth.</p><input type="password" id="newPassword" minlength="8" placeholder="Minimal 8 karakter" /><input type="password" id="newPassword2" minlength="8" placeholder="Ulangi password" /><button class="btn btn-outline full" id="changePasswordBtn">🔐 Ganti Password</button></div></div>
+      <div class="glass card"><h3>Catatan keamanan</h3><p class="muted">Gunakan Supabase Auth untuk sesi login. Jangan menaruh <code>service_role key</code> di file frontend atau Netlify.</p></div>
+    </section>
+  </main>
+
+  <nav class="bottom-nav glass"><button data-tab="home" class="nav-item active">⌂<span>Beranda</span></button><button data-tab="daily" class="nav-item">▣<span>Laporan</span></button><button data-tab="expense" class="nav-item">−<span>Keluar</span></button><button data-tab="saving" class="nav-item">◎<span>Tabungan</span></button><button data-tab="dashboard" class="nav-item">◒<span>Dashboard</span></button><button data-tab="export" class="nav-item">↥<span>Ekspor</span></button></nav>
+
+  <div id="toast" class="toast"></div>
+  <script src="supabase.js"></script>
+  <script src="home.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
