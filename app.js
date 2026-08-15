@@ -15,10 +15,15 @@
   const dataOf=r=>r?.data||{};
   const dTotal=d=>(Number(d.pend1)||0)+(Number(d.pend2)||0)-(Number(d.titip1)||0)-(Number(d.titip2)||0)-(Number(d.titip3)||0)-(Number(d.tabungan)||0);
   const monthKey=d=>d.slice(0,7);
-  function localSessionOK(){return !!localStorage.getItem('kantin_session');}
   async function requireSession(){
-    try{ const {data}=await db.auth.getSession(); if(data?.session)return true; }catch(e){}
-    return localSessionOK();
+    try {
+      const {data, error}=await db.auth.getSession();
+      if(error) throw error;
+      return !!data?.session;
+    } catch (e) {
+      console.error('Session check gagal:', e);
+      return false;
+    }
   }
   function nav(tab){$$('[data-tab]').forEach(x=>x.classList.toggle('active',x.dataset.tab===tab));$$('.tab-page').forEach(x=>x.classList.toggle('active',x.id===`tab-${tab}`));if(tab==='dashboard')renderDashboard();if(tab==='home')renderHomeSummary();}
   async function getRows(){
@@ -63,6 +68,21 @@
     ['#pend1','#pend2','#titip1','#titip2','#titip3','#dailySaving'].forEach(x=>$(x).addEventListener('input',updateDailyTotal));$('#dailyDate').addEventListener('change',e=>loadDaily(e.target.value));$('#dailySearch').addEventListener('input',renderDaily);$('#saveDailyBtn').onclick=()=>saveDaily().catch(e=>showToast(e.message,true));$('#clearDailyBtn').onclick=clearDaily;$('#saveExpenseBtn').onclick=()=>saveExpense().catch(e=>showToast(e.message,true));$('#saveWithdrawBtn').onclick=()=>saveWithdraw().catch(e=>showToast(e.message,true));$('#exportCsvBtn').onclick=exportCSV;$('#changePasswordBtn').onclick=()=>changePassword().catch(e=>showToast(e.message,true));$('#logoutBtn').onclick=logout;$('#printDailyBtn').onclick=printDaily;
     $$('.seg').forEach(b=>b.onclick=()=>{$$('.seg').forEach(x=>x.classList.remove('active'));b.classList.add('active');currentPeriod=Number(b.dataset.period);renderDashboard()});
   }
-  async function init(){if(!(await requireSession())){location.href='index.html';return;}bind();if(window.homeInit)window.homeInit();try{await refresh();loadDaily($('#dailyDate').value)}catch(e){showToast(`Gagal memuat data: ${e.message}`,true)}}
+  async function init(){
+    if(!(await requireSession())){
+      localStorage.removeItem('kantin_session');
+      location.replace('index.html');
+      return;
+    }
+    try {
+      bind();
+      if(window.homeInit)window.homeInit();
+      await refresh();
+      loadDaily($('#dailyDate').value);
+    } catch(e) {
+      console.error(e);
+      showToast(`Gagal memuat aplikasi: ${e.message}`, true);
+    }
+  }
   window.addEventListener('load',init);
 })();
