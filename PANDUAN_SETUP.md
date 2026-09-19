@@ -125,3 +125,29 @@ Edit file di komputer -> upload/commit ke GitHub -> Netlify otomatis deploy ulan
 `supabase.js` berada di frontend sehingga hanya boleh berisi Publishable/anon key. Service-role key tidak boleh di-upload ke GitHub atau dimasukkan ke browser.
 
 Tabel `kantin_users` dipertahankan untuk kompatibilitas; password ditangani oleh Supabase Auth.
+
+
+## Deploy tanpa kredit Netlify
+
+Jika Netlify menampilkan pesan bahwa **operational credits habis** dan production deploy/Agent Runner dijeda, file web tetap bisa dipakai tanpa mengubah database Supabase.
+
+**Opsi 1 — Deploy manual ke Cloudflare Pages**
+1. Pastikan folder project ini di-upload ke GitHub.
+2. Di Cloudflare Pages, buat project dari repository tersebut.
+3. Karena project ini adalah HTML/CSS/JS statis, tidak perlu build command.
+4. Publish directory: folder `kantin-uimsya-profesional` (atau root repository jika isinya sudah berada di root).
+5. Konfigurasi Supabase tetap memakai `supabase.js` yang sudah ada.
+
+**Opsi 2 — Jalankan lokal**
+- Buka project melalui local web server (jangan mengandalkan `file://` bila browser memblokir module/request).
+- Contoh: gunakan extension Live Server di VS Code.
+
+**Opsi 3 — Tetap Netlify**
+- Tunggu reset billing cycle atau upgrade paket sesuai kebutuhan Netlify.
+- Tidak perlu membuat ulang database Supabase; deploy ulang project yang sama setelah akses production deploy kembali tersedia.
+
+### Perubahan format print
+- Format cetak diubah menjadi **A4 profesional**.
+- Ada header identitas Kantin Uimsya Putri, judul laporan, waktu cetak, ringkasan angka, tabel zebra, dan footer dokumen.
+- Tabel diusahakan tidak terpotong antar halaman dan header tabel diulang ketika tabel melewati halaman.
+- Laporan harian menggunakan layout tabel yang lebih padat agar lebih cocok untuk cetak.

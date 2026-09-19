@@ -64,7 +64,55 @@
   function withdrawModal(){const balance=byType('harian').reduce((a,r)=>a+num(data(r).tabungan),0)+byType('setoran_tabungan').reduce((a,r)=>a+num(data(r).nominal),0)-byType('penarikan').reduce((a,r)=>a+num(data(r).nominal),0);formModal('Penarikan Tabungan',`<div class="form-grid cols-2"><label>Tanggal<input type="date" name="tgl" value="${isoToday()}" required></label><label>Nominal<input type="number" name="nominal" min="0" max="${balance}" value="0" required></label><label class="full">Keterangan<textarea name="keterangan">Penarikan tabungan</textarea></label></div><div class="notice">Saldo tersedia: <b>${fmt(balance)}</b></div>`,async f=>{const t=f.get('tgl'),n=num(f.get('nominal'));if(isFriday(t))throw new Error('Jumat otomatis libur.');if(n<=0||n>balance)throw new Error('Nominal melebihi saldo tabungan.');await writeRow(t,'penarikan',{nominal:n,keterangan:String(f.get('keterangan')||'')})});}
 
   function reportData(kind){if(kind==='daily')return byType('harian').sort((a,b)=>b.tgl.localeCompare(a.tgl));if(kind==='cash')return cashEntries();if(kind==='profit')return monthlySummary(12);if(kind==='receivable')return receivables();if(kind==='payable')return payables();if(kind==='saving')return cashEntries().filter(x=>x.source==='saving');return []}
-  function renderReport(kind){state.report=kind;const el=$('#reportPreview'),rows=reportData(kind);let html='';if(kind==='cash'){html=`<div class="report-title"><h3>Buku Kas</h3><p>Saldo awal: ${fmt(state.opening)}</p></div><div class="table-wrap"><table><thead><tr><th>Tanggal</th><th>Sumber</th><th>Keterangan</th><th>Masuk</th><th>Keluar</th></tr></thead><tbody>${rows.map(x=>`<tr><td>${x.tgl}</td><td>${x.label}</td><td>${esc(x.note)}</td><td>${fmt(x.in)}</td><td>${fmt(x.out)}</td></tr>`).join('')}</tbody></table></div>`}else if(kind==='profit'){html=`<div class="report-title"><h3>Laba Rugi 12 Bulan</h3></div><div class="table-wrap"><table><thead><tr><th>Bulan</th><th>Penjualan</th><th>Pend. Lain</th><th>Beban</th><th>Laba</th></tr></thead><tbody>${rows.map(x=>`<tr><td>${monthName(x.key)}</td><td>${fmt(x.sales)}</td><td>${fmt(x.otherIn)}</td><td>${fmt(x.expense)}</td><td>${fmt(x.sales+x.otherIn-x.expense)}</td></tr>`).join('')}</tbody></table></div>`}else if(kind==='daily'){html=`<div class="report-title"><h3>Laporan Harian Kantin</h3></div><div class="table-wrap"><table><thead><tr><th>Tgl</th><th>Pend I</th><th>Pend II</th><th>Titip I</th><th>Titip II</th><th>Titip III</th><th>Tab.</th><th>Total</th></tr></thead><tbody>${rows.map(r=>{const d=data(r);return `<tr><td>${r.tgl}</td><td>${fmt(d.pend1)}</td><td>${fmt(d.pend2)}</td><td>${fmt(d.titip1)}</td><td>${fmt(d.titip2)}</td><td>${fmt(d.titip3)}</td><td>${fmt(d.tabungan)}</td><td>${fmt(totalDaily(d))}</td></tr>`}).join('')}</tbody></table></div>`}else if(kind==='receivable'||kind==='payable'){const r=rows;html=`<div class="report-title"><h3>${kind==='receivable'?'Laporan Piutang':'Laporan Hutang'}</h3></div><div class="table-wrap"><table><thead><tr><th>Tanggal</th><th>Nama</th><th>Nominal</th><th>Terbayar</th><th>Sisa</th><th>Status</th></tr></thead><tbody>${r.map(x=>`<tr><td>${x.tgl}</td><td>${esc(x.d[kind==='receivable'?'pelanggan':'supplier'])}</td><td>${fmt(x.d.nominal)}</td><td>${fmt(x.paid)}</td><td>${fmt(x.balance)}</td><td>${x.status}</td></tr>`).join('')}</tbody></table></div>`}else{html=`<div class="report-title"><h3>Laporan Tabungan</h3></div><div class="table-wrap"><table><thead><tr><th>Tanggal</th><th>Jenis</th><th>Keterangan</th><th>Nominal</th></tr></thead><tbody>${rows.map(x=>`<tr><td>${x.tgl}</td><td>${x.label}</td><td>${esc(x.note)}</td><td>${fmt(x.in||x.out)}</td></tr>`).join('')}</tbody></table></div>`}el.innerHTML=html||'<div class="empty">Belum ada data.</div>';}
+  function renderReport(kind){
+    state.report=kind;
+    const el=$('#reportPreview'), rows=reportData(kind);
+    const reportNames={
+      cash:'Buku Kas',
+      profit:'Laba Rugi 12 Bulan',
+      receivable:'Laporan Piutang',
+      payable:'Laporan Hutang',
+      saving:'Laporan Tabungan',
+      daily:'Laporan Harian Kantin'
+    };
+    const reportName=reportNames[kind]||'Laporan Keuangan';
+    const generated=new Date().toLocaleString('id-ID',{dateStyle:'long',timeStyle:'short'});
+    let body='', summary='';
+
+    if(kind==='cash'){
+      const masuk=rows.reduce((s,x)=>s+num(x.in),0), keluar=rows.reduce((s,x)=>s+num(x.out),0);
+      body=`<div class="table-wrap"><table><thead><tr><th>Tanggal</th><th>Sumber</th><th>Keterangan</th><th>Masuk</th><th>Keluar</th></tr></thead><tbody>${rows.map(x=>`<tr><td>${x.tgl}</td><td>${x.label}</td><td>${esc(x.note)}</td><td class="num">${fmt(x.in)}</td><td class="num">${fmt(x.out)}</td></tr>`).join('')}</tbody></table></div>`;
+      summary=`<div class="print-summary"><div><span>Saldo Awal</span><b>${fmt(state.opening)}</b></div><div><span>Total Masuk</span><b>${fmt(masuk)}</b></div><div><span>Total Keluar</span><b>${fmt(keluar)}</b></div><div><span>Saldo Akhir</span><b>${fmt(state.opening+masuk-keluar)}</b></div></div>`;
+    }else if(kind==='profit'){
+      const sales=rows.reduce((s,x)=>s+num(x.sales),0), other=rows.reduce((s,x)=>s+num(x.otherIn),0), expense=rows.reduce((s,x)=>s+num(x.expense),0), profit=sales+other-expense;
+      body=`<div class="table-wrap"><table><thead><tr><th>Bulan</th><th>Penjualan</th><th>Pend. Lain</th><th>Beban</th><th>Laba</th></tr></thead><tbody>${rows.map(x=>`<tr><td>${monthName(x.key)}</td><td class="num">${fmt(x.sales)}</td><td class="num">${fmt(x.otherIn)}</td><td class="num">${fmt(x.expense)}</td><td class="num">${fmt(x.sales+x.otherIn-x.expense)}</td></tr>`).join('')}</tbody></table></div>`;
+      summary=`<div class="print-summary"><div><span>Total Penjualan</span><b>${fmt(sales)}</b></div><div><span>Pendapatan Lain</span><b>${fmt(other)}</b></div><div><span>Total Beban</span><b>${fmt(expense)}</b></div><div><span>Laba Bersih</span><b>${fmt(profit)}</b></div></div>`;
+    }else if(kind==='daily'){
+      const total=rows.reduce((s,r)=>s+totalDaily(data(r)),0);
+      body=`<div class="table-wrap"><table><thead><tr><th>Tgl</th><th>Pend I</th><th>Pend II</th><th>Titip I</th><th>Titip II</th><th>Titip III</th><th>Tab.</th><th>Total</th></tr></thead><tbody>${rows.map(r=>{const d=data(r);return `<tr><td>${r.tgl}</td><td class="num">${fmt(d.pend1)}</td><td class="num">${fmt(d.pend2)}</td><td class="num">${fmt(d.titip1)}</td><td class="num">${fmt(d.titip2)}</td><td class="num">${fmt(d.titip3)}</td><td class="num">${fmt(d.tabungan)}</td><td class="num">${fmt(totalDaily(d))}</td></tr>`}).join('')}</tbody></table></div>`;
+      summary=`<div class="print-summary compact"><div><span>Jumlah Hari</span><b>${rows.length}</b></div><div><span>Total Operasional</span><b>${fmt(total)}</b></div></div>`;
+    }else if(kind==='receivable'||kind==='payable'){
+      const r=rows, nominal=r.reduce((s,x)=>s+num(x.d.nominal),0), paid=r.reduce((s,x)=>s+num(x.paid),0), balance=r.reduce((s,x)=>s+num(x.balance),0);
+      body=`<div class="table-wrap"><table><thead><tr><th>Tanggal</th><th>Nama</th><th>Nominal</th><th>Terbayar</th><th>Sisa</th><th>Status</th></tr></thead><tbody>${r.map(x=>`<tr><td>${x.tgl}</td><td>${esc(x.d[kind==='receivable'?'pelanggan':'supplier'])}</td><td class="num">${fmt(x.d.nominal)}</td><td class="num">${fmt(x.paid)}</td><td class="num">${fmt(x.balance)}</td><td>${x.status}</td></tr>`).join('')}</tbody></table></div>`;
+      summary=`<div class="print-summary compact"><div><span>Total Nominal</span><b>${fmt(nominal)}</b></div><div><span>Total Terbayar</span><b>${fmt(paid)}</b></div><div><span>Total Sisa</span><b>${fmt(balance)}</b></div></div>`;
+    }else{
+      const masuk=rows.reduce((s,x)=>s+num(x.in),0), keluar=rows.reduce((s,x)=>s+num(x.out),0);
+      body=`<div class="table-wrap"><table><thead><tr><th>Tanggal</th><th>Jenis</th><th>Keterangan</th><th>Nominal</th></tr></thead><tbody>${rows.map(x=>`<tr><td>${x.tgl}</td><td>${x.label}</td><td>${esc(x.note)}</td><td class="num">${fmt(x.in||x.out)}</td></tr>`).join('')}</tbody></table></div>`;
+      summary=`<div class="print-summary compact"><div><span>Total Setoran</span><b>${fmt(masuk)}</b></div><div><span>Total Penarikan</span><b>${fmt(keluar)}</b></div><div><span>Selisih</span><b>${fmt(masuk-keluar)}</b></div></div>`;
+    }
+
+    el.innerHTML=`<div class="print-sheet ${kind==='daily'?'print-wide':''}">
+      <header class="print-header">
+        <div class="print-brand-mark">KU</div>
+        <div><div class="print-kicker">KANTIN UIMSYA PUTRI</div><h3>${reportName}</h3><p>Keuangan &amp; Operasional</p></div>
+        <div class="print-meta"><span>Dicetak</span><b>${generated}</b></div>
+      </header>
+      <div class="print-rule"></div>
+      ${summary}
+      ${body}
+      <footer class="print-footer"><span>Dokumen laporan internal • Kantin Uimsya Putri</span><span>Dicetak dari Sistem Keuangan</span></footer>
+    </div>`;
+  }
   function exportCSVRows(rows,name){if(!rows.length)return toast('Tidak ada data untuk diekspor.',true);const flat=rows.map(r=>r.d?({tanggal:r.tgl,...r.d}):r);const heads=[...new Set(flat.flatMap(x=>Object.keys(x)))];const csv='\ufeff'+[heads.join(','),...flat.map(x=>heads.map(h=>`"${String(x[h]??'').replace(/"/g,'""')}"`).join(','))].join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download=`${name}-${isoToday()}.csv`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1200)}
 
   function openPassword(){formModal('Ganti Password',`<div class="form-grid cols-1"><label>Password Baru<input type="password" name="p1" minlength="8" required></label><label>Konfirmasi Password<input type="password" name="p2" minlength="8" required></label></div>`,async f=>{const a=f.get('p1'),b=f.get('p2');if(a.length<8||a!==b)throw new Error('Password minimal 8 karakter dan harus sama.');const {error}=await db.auth.updateUser({password:a});if(error)throw error;toast('Password berhasil diubah.');});}
