@@ -155,3 +155,11 @@ Jika Netlify menampilkan pesan bahwa **operational credits habis** dan productio
 
 ## Urutan data
 Data bertanggal ditampilkan kronologis dari tanggal paling awal di atas sampai tanggal paling akhir di bawah, termasuk laporan cetak.
+
+
+## Pengurutan seluruh data
+Pengurutan tanggal sekarang berlaku secara menyeluruh untuk **semua data yang mempunyai field tanggal**, bukan hanya halaman laporan. Data pada tabel/daftar transaksi, pemasukan-pengeluaran, setoran/penarikan, piutang, hutang, tabungan, laporan harian, dan laporan cetak akan mengikuti urutan:
+
+**tanggal paling awal → tanggal paling akhir**
+
+Data baru tidak otomatis berada di paling atas hanya karena baru diinput; posisinya mengikuti tanggal yang tercatat.
