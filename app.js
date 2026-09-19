@@ -64,9 +64,12 @@
   function withdrawModal(){const balance=byType('harian').reduce((a,r)=>a+num(data(r).tabungan),0)+byType('setoran_tabungan').reduce((a,r)=>a+num(data(r).nominal),0)-byType('penarikan').reduce((a,r)=>a+num(data(r).nominal),0);formModal('Penarikan Tabungan',`<div class="form-grid cols-2"><label>Tanggal<input type="date" name="tgl" value="${isoToday()}" required></label><label>Nominal<input type="number" name="nominal" min="0" max="${balance}" value="0" required></label><label class="full">Keterangan<textarea name="keterangan">Penarikan tabungan</textarea></label></div><div class="notice">Saldo tersedia: <b>${fmt(balance)}</b></div>`,async f=>{const t=f.get('tgl'),n=num(f.get('nominal'));if(isFriday(t))throw new Error('Jumat otomatis libur.');if(n<=0||n>balance)throw new Error('Nominal melebihi saldo tabungan.');await writeRow(t,'penarikan',{nominal:n,keterangan:String(f.get('keterangan')||'')})});}
 
   function reportData(kind){if(kind==='daily')return byType('harian').sort((a,b)=>b.tgl.localeCompare(a.tgl));if(kind==='cash')return cashEntries();if(kind==='profit')return monthlySummary(12);if(kind==='receivable')return receivables();if(kind==='payable')return payables();if(kind==='saving')return cashEntries().filter(x=>x.source==='saving');return []}
-  function renderReport(kind){
+  function dateKey(v){ if(!v)return 0; const s=String(v).trim(); const t=Date.parse(s); if(!Number.isNaN(t))return t; const m=s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/); if(m){let y=+m[3];if(y<100)y+=2000;return new Date(y,+m[2]-1,+m[1]).getTime()} return 0; }
+function sortChronological(rows,field='tgl'){return Array.isArray(rows)?[...rows].sort((a,b)=>dateKey(a?.[field])-dateKey(b?.[field])):rows;}
+
+function renderReport(kind){
     state.report=kind;
-    const el=$('#reportPreview'), rows=reportData(kind);
+    const el=$('#reportPreview'), rows=sortChronological(reportData(kind),'tgl');
     const reportNames={
       cash:'Buku Kas',
       profit:'Laba Rugi 12 Bulan',

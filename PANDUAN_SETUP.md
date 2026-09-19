@@ -151,3 +151,7 @@ Jika Netlify menampilkan pesan bahwa **operational credits habis** dan productio
 - Ada header identitas Kantin Uimsya Putri, judul laporan, waktu cetak, ringkasan angka, tabel zebra, dan footer dokumen.
 - Tabel diusahakan tidak terpotong antar halaman dan header tabel diulang ketika tabel melewati halaman.
 - Laporan harian menggunakan layout tabel yang lebih padat agar lebih cocok untuk cetak.
+
+
+## Urutan data
+Data bertanggal ditampilkan kronologis dari tanggal paling awal di atas sampai tanggal paling akhir di bawah, termasuk laporan cetak.
