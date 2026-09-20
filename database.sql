@@ -25,6 +25,26 @@ CREATE INDEX IF NOT EXISTS idx_kantin_data_tgl ON kantin_data (tgl);
 -- Aplikasi memakai Supabase Auth untuk password. Password JANGAN disimpan di kantin_users.
 -- Tabel kantin_users dipertahankan untuk kompatibilitas data lama.
 
+-- ── Tipe record yang digunakan aplikasi ──────────────────────────────────────
+-- 'harian'          → Laporan harian operasional (record_id: 'harian:YYYY-MM-DD')
+-- 'libur'           → Hari libur yang ditetapkan admin (record_id: 'libur:YYYY-MM-DD')
+--                     data: { keterangan: 'Hari Raya' }
+--                     Tanggal ini tampil di laporan dengan status LIBUR dan semua nilai Rp0.
+-- 'pemasukan'       → Transaksi kas masuk
+-- 'pengeluaran'     → Transaksi kas keluar
+-- 'transfer'        → Transfer antar akun
+-- 'setoran_tabungan'→ Setoran tabungan manual
+-- 'penarikan'       → Penarikan tabungan
+-- 'piutang'         → Piutang pelanggan
+-- 'hutang'          → Hutang ke supplier
+-- 'pembayaran_piutang' / 'pembayaran_hutang' → Pembayaran tagihan
+-- 'persediaan'      → Stok barang
+-- 'pemasok'         → Data supplier
+-- Pengaturan 'Libur Jumat Otomatis' disimpan di localStorage browser (bukan database).
+
+-- Index tambahan untuk query hari libur lebih cepat
+CREATE INDEX IF NOT EXISTS idx_kantin_data_libur ON kantin_data (tgl) WHERE tipe = 'libur';
+
 ALTER TABLE kantin_data ENABLE ROW LEVEL SECURITY;
 ALTER TABLE kantin_users ENABLE ROW LEVEL SECURITY;
 
