@@ -50,16 +50,49 @@
   function renderDaily(){
     const harian=byType('harian').map(r=>({...r,status:'OPERASIONAL'}));
     const libur=byLibur().map(r=>({...r,status:'LIBUR'}));
-    const drow=[...harian,...libur].sort((a,b)=>b.tgl.localeCompare(a.tgl));
+    const allRows=[...harian,...libur];
+
+    // ── Isi periode filter ────────────────────────────────────────────────
+    const pfEl=$('#dailyPeriodFilter');
+    const prevPeriod=pfEl?.value||'';
+    const periods=[...new Set(allRows.map(r=>r.tgl.slice(0,7)))].sort().reverse();
+    if(pfEl){
+      pfEl.innerHTML='<option value="">📅 Semua Periode</option>'+
+        periods.map(p=>`<option value="${p}"${p===prevPeriod?' selected':''}>${monthName(p)}</option>`).join('');
+    }
+    const filterPeriod=pfEl?.value||'';
+
     const selected=$('#dailyDate');
     if(selected&&!selected.value)selected.value=isoToday();
     loadDailyForm(selected?.value||isoToday());
-    $('#dailyTable tbody').innerHTML=drow.map(r=>{
-      const d=data(r);const isLibur=r.status==='LIBUR';
-      const pend=isLibur?0:num(d.pend1)+num(d.pend2);
-      const titip=isLibur?0:num(d.titip1)+num(d.titip2)+num(d.titip3);
-      return `<tr class="${isLibur?'row-libur':''}"><td>${r.tgl}</td><td>${getDayName(r.tgl)}</td><td><span class="status-badge ${isLibur?'libur':'ops'}">${r.status}</span></td><td>${isLibur?'—':fmt(pend)}</td><td>${isLibur?'—':fmt(titip)}</td><td>${isLibur?'—':fmt(d.tabungan)}</td><td class="money">${fmt(isLibur?0:totalDaily(d))}</td><td><button class="icon-btn edit-daily" data-date="${r.tgl}">Edit</button> ${isLibur?`<button class="icon-btn danger-text del-holiday" data-date="${r.tgl}" data-id="${r.id}">Buka</button>`:`<button class="icon-btn danger-text del" data-id="${r.id}">Hapus</button>`}</td></tr>`;
-    }).join('')||'<tr><td colspan="8" class="empty">Belum ada laporan harian atau hari libur tercatat.</td></tr>';
+
+    // ── Filter & urutkan ─────────────────────────────────────────────────
+    const filtered=filterPeriod
+      ?allRows.filter(r=>r.tgl.startsWith(filterPeriod))
+      :allRows;
+
+    // ── Kelompokkan per bulan, terbaru di atas ────────────────────────────
+    const mkList=[...new Set(filtered.map(r=>r.tgl.slice(0,7)))].sort().reverse();
+    let html='';
+    if(!filtered.length){
+      html='<tr><td colspan="8" class="empty">Belum ada laporan harian atau hari libur tercatat untuk periode ini.</td></tr>';
+    }else{
+      mkList.forEach(mk=>{
+        const rows=filtered.filter(r=>r.tgl.startsWith(mk)).sort((a,b)=>b.tgl.localeCompare(a.tgl));
+        let mOps=0,mLibur=0,mPend=0,mTitip=0,mTab=0,mNet=0;
+        html+=`<tr class="month-group-header"><td colspan="8">📅 ${monthName(mk)}</td></tr>`;
+        rows.forEach(r=>{
+          const d=data(r);const isLibur=r.status==='LIBUR';
+          const pend=isLibur?0:num(d.pend1)+num(d.pend2);
+          const titip=isLibur?0:num(d.titip1)+num(d.titip2)+num(d.titip3);
+          const tab=isLibur?0:num(d.tabungan);const net=isLibur?0:totalDaily(d);
+          if(isLibur)mLibur++;else{mOps++;mPend+=pend;mTitip+=titip;mTab+=tab;mNet+=net;}
+          html+=`<tr class="${isLibur?'row-libur':''}"><td>${r.tgl}</td><td>${getDayName(r.tgl)}</td><td><span class="status-badge ${isLibur?'libur':'ops'}">${r.status}</span></td><td>${isLibur?'—':fmt(pend)}</td><td>${isLibur?'—':fmt(titip)}</td><td>${isLibur?'—':fmt(tab)}</td><td class="money">${fmt(net)}</td><td><button class="icon-btn edit-daily" data-date="${r.tgl}">Edit</button> ${isLibur?`<button class="icon-btn danger-text del-holiday" data-date="${r.tgl}" data-id="${r.id}">Buka</button>`:`<button class="icon-btn danger-text del" data-id="${r.id}">Hapus</button>`}</td></tr>`;
+        });
+        html+=`<tr class="month-subtotal"><td colspan="2"><b>Subtotal ${monthName(mk)}</b></td><td><span class="subtotal-pill">${mOps} ops</span> <span class="subtotal-pill libur-pill">${mLibur} libur</span></td><td>${fmt(mPend)}</td><td>${fmt(mTitip)}</td><td>${fmt(mTab)}</td><td class="money">${fmt(mNet)}</td><td></td></tr>`;
+      });
+    }
+    $('#dailyTable tbody').innerHTML=html;
     $$('#dailyTable .edit-daily').forEach(b=>b.onclick=()=>{nav('harian');$('#dailyDate').value=b.dataset.date;loadDailyForm(b.dataset.date)});
     $$('#dailyTable .del').forEach(b=>b.onclick=()=>deleteConfirm(b.dataset.id));
     $$('#dailyTable .del-holiday').forEach(b=>b.onclick=async()=>{
@@ -112,12 +145,22 @@
     });
   }
 
-  function generateFullDailyRange(){
+  function generateFullDailyRange(filterPeriod){
     const harian=byType('harian');const libur=byLibur();const liburJumat=getLiburJumat();
     if(!harian.length&&!libur.length)return[];
-    const allDates=[...harian,...libur].map(r=>r.tgl);
-    const minDate=allDates.reduce((a,b)=>a<b?a:b);
-    const maxDate=allDates.reduce((a,b)=>a>b?a:b);
+    const allTgl=[...harian,...libur].map(r=>r.tgl);
+    let minDate=allTgl.reduce((a,b)=>a<b?a:b);
+    let maxDate=allTgl.reduce((a,b)=>a>b?a:b);
+    // Jika ada filter periode, sempitkan rentang ke bulan tersebut
+    if(filterPeriod){
+      const [fy,fm]=filterPeriod.split('-').map(Number);
+      const lastDay=new Date(fy,fm,0).getDate();
+      const pStart=`${filterPeriod}-01`;
+      const pEnd=`${filterPeriod}-${String(lastDay).padStart(2,'0')}`;
+      minDate=minDate>pStart?minDate:pStart;
+      maxDate=maxDate<pEnd?maxDate:pEnd;
+      if(minDate>maxDate)return[];
+    }
     const result=[];const cur=new Date(`${minDate}T00:00:00`);const end=new Date(`${maxDate}T00:00:00`);
     while(cur<=end){
       const tgl=cur.toISOString().slice(0,10);
@@ -178,15 +221,43 @@ function renderReport(kind){
       body=`<div class="table-wrap"><table><thead><tr><th>Bulan</th><th>Penjualan</th><th>Pend. Lain</th><th>Beban</th><th>Laba</th></tr></thead><tbody>${rows.map(x=>`<tr><td>${monthName(x.key)}</td><td class="num">${fmt(x.sales)}</td><td class="num">${fmt(x.otherIn)}</td><td class="num">${fmt(x.expense)}</td><td class="num">${fmt(x.sales+x.otherIn-x.expense)}</td></tr>`).join('')}</tbody></table></div>`;
       summary=`<div class="print-summary"><div><span>Total Penjualan</span><b>${fmt(sales)}</b></div><div><span>Pendapatan Lain</span><b>${fmt(other)}</b></div><div><span>Total Beban</span><b>${fmt(expense)}</b></div><div><span>Laba Bersih</span><b>${fmt(profit)}</b></div></div>`;
     }else if(kind==='daily'){
-      const allDates=generateFullDailyRange();
-      const opsRows=allDates.filter(x=>x.status==='OPERASIONAL');
-      const liburRows=allDates.filter(x=>x.status==='LIBUR');
-      const totalPemasukan=opsRows.reduce((s,x)=>s+num(x.pend1)+num(x.pend2),0);
-      const totalPengeluaran=opsRows.reduce((s,x)=>s+num(x.titip1)+num(x.titip2)+num(x.titip3),0);
-      const totalTabungan=opsRows.reduce((s,x)=>s+num(x.tabungan),0);
-      const totalNet=opsRows.reduce((s,x)=>s+totalDaily(x),0);
-      body=`<div class="table-wrap"><table class="daily-full-table"><thead><tr><th>Tanggal</th><th>Hari</th><th>Status</th><th class="num">Pemasukan</th><th class="num">Pengeluaran</th><th class="num">Tabungan</th><th class="num">Total</th></tr></thead><tbody>${allDates.map(x=>{const isLibur=x.status==='LIBUR';const pend=num(x.pend1)+num(x.pend2);const titip=num(x.titip1)+num(x.titip2)+num(x.titip3);return`<tr class="${isLibur?'row-libur':''}"><td>${x.tgl}</td><td>${getDayName(x.tgl)}</td><td><span class="print-status-badge ${isLibur?'libur':'ops'}">${x.status}</span></td><td class="num">${fmt(isLibur?0:pend)}</td><td class="num">${fmt(isLibur?0:titip)}</td><td class="num">${fmt(isLibur?0:num(x.tabungan))}</td><td class="num">${fmt(isLibur?0:totalDaily(x))}</td></tr>`;}).join('')||'<tr><td colspan="7" class="empty">Belum ada data.</td></tr>'}</tbody></table></div>`;
-      summary=`<div class="print-summary wide"><div><span>Hari Operasional</span><b>${opsRows.length}</b></div><div><span>Hari Libur</span><b>${liburRows.length}</b></div><div><span>Total Pemasukan</span><b>${fmt(totalPemasukan)}</b></div><div><span>Total Pengeluaran</span><b>${fmt(totalPengeluaran)}</b></div><div><span>Total Tabungan</span><b>${fmt(totalTabungan)}</b></div><div><span>Total Bersih</span><b>${fmt(totalNet)}</b></div></div>`;
+      // ── Filter periode (select ada di dalam preview HTML setelah render pertama) ──
+      const prevPeriod=$('#reportPeriodFilter')?.value||'';
+      const periodTgl=[...byType('harian'),...byLibur()].map(r=>r.tgl.slice(0,7));
+      const periods=[...new Set(periodTgl)].sort().reverse();
+      const periodOptions='<option value="">Semua Periode</option>'+
+        periods.map(p=>`<option value="${p}"${p===prevPeriod?' selected':''}>${monthName(p)}</option>`).join('');
+
+      // ── Generate rentang tanggal lengkap ──────────────────────────────────
+      const allDates=generateFullDailyRange(prevPeriod);
+      const opsAll=allDates.filter(x=>x.status==='OPERASIONAL');
+      const liburAll=allDates.filter(x=>x.status==='LIBUR');
+      const totalPemasukan=opsAll.reduce((s,x)=>s+num(x.pend1)+num(x.pend2),0);
+      const totalPengeluaran=opsAll.reduce((s,x)=>s+num(x.titip1)+num(x.titip2)+num(x.titip3),0);
+      const totalTabungan=opsAll.reduce((s,x)=>s+num(x.tabungan),0);
+      const totalNet=opsAll.reduce((s,x)=>s+totalDaily(x),0);
+
+      // ── Kelompokkan per bulan ─────────────────────────────────────────────
+      const mkList=[...new Set(allDates.map(x=>x.tgl.slice(0,7)))].sort();
+      let tbody='';
+      mkList.forEach(mk=>{
+        const dates=allDates.filter(x=>x.tgl.startsWith(mk));
+        let mOps=0,mLibur=0,mPend=0,mTitip=0,mTab=0,mNet=0;
+        tbody+=`<tr class="print-month-header"><td colspan="7">📅 ${monthName(mk)}</td></tr>`;
+        dates.forEach(x=>{
+          const isLibur=x.status==='LIBUR';
+          const pend=num(x.pend1)+num(x.pend2);const titip=num(x.titip1)+num(x.titip2)+num(x.titip3);
+          if(isLibur)mLibur++;else{mOps++;mPend+=pend;mTitip+=titip;mTab+=num(x.tabungan);mNet+=totalDaily(x);}
+          tbody+=`<tr class="${isLibur?'row-libur':''}"><td>${x.tgl}</td><td>${getDayName(x.tgl)}</td><td><span class="print-status-badge ${isLibur?'libur':'ops'}">${x.status}</span></td><td class="num">${fmt(isLibur?0:pend)}</td><td class="num">${fmt(isLibur?0:titip)}</td><td class="num">${fmt(isLibur?0:num(x.tabungan))}</td><td class="num">${fmt(isLibur?0:totalDaily(x))}</td></tr>`;
+        });
+        tbody+=`<tr class="print-month-subtotal"><td colspan="2"><b>Subtotal ${monthName(mk)}</b></td><td>${mOps} ops · ${mLibur} libur</td><td class="num"><b>${fmt(mPend)}</b></td><td class="num"><b>${fmt(mTitip)}</b></td><td class="num"><b>${fmt(mTab)}</b></td><td class="num"><b>${fmt(mNet)}</b></td></tr>`;
+      });
+      tbody+=`<tr class="print-grand-total"><td colspan="2"><b>TOTAL KESELURUHAN</b></td><td>${opsAll.length} ops · ${liburAll.length} libur</td><td class="num"><b>${fmt(totalPemasukan)}</b></td><td class="num"><b>${fmt(totalPengeluaran)}</b></td><td class="num"><b>${fmt(totalTabungan)}</b></td><td class="num"><b>${fmt(totalNet)}</b></td></tr>`;
+
+      // ── Filter dropdown (tersembunyi saat print) ──────────────────────────
+      const filterBar=`<div class="period-filter-bar no-print"><span>Filter Periode:</span><select id="reportPeriodFilter">${periodOptions}</select><span class="period-info">${allDates.length} hari · ${mkList.length} bulan ditampilkan</span></div>`;
+      body=filterBar+`<div class="table-wrap"><table class="daily-full-table"><thead><tr><th>Tanggal</th><th>Hari</th><th>Status</th><th class="num">Pemasukan</th><th class="num">Pengeluaran</th><th class="num">Tabungan</th><th class="num">Total</th></tr></thead><tbody>${tbody||'<tr><td colspan="7" class="empty">Belum ada data.</td></tr>'}</tbody></table></div>`;
+      summary=`<div class="print-summary wide"><div><span>Hari Operasional</span><b>${opsAll.length}</b></div><div><span>Hari Libur</span><b>${liburAll.length}</b></div><div><span>Total Pemasukan</span><b>${fmt(totalPemasukan)}</b></div><div><span>Total Pengeluaran</span><b>${fmt(totalPengeluaran)}</b></div><div><span>Total Tabungan</span><b>${fmt(totalTabungan)}</b></div><div><span>Total Bersih</span><b>${fmt(totalNet)}</b></div></div>`;
     }else if(kind==='receivable'||kind==='payable'){
       const r=rows, nominal=r.reduce((s,x)=>s+num(x.d.nominal),0), paid=r.reduce((s,x)=>s+num(x.paid),0), balance=r.reduce((s,x)=>s+num(x.balance),0);
       body=`<div class="table-wrap"><table><thead><tr><th>Tanggal</th><th>Nama</th><th>Nominal</th><th>Terbayar</th><th>Sisa</th><th>Status</th></tr></thead><tbody>${r.map(x=>`<tr><td>${x.tgl}</td><td>${esc(x.d[kind==='receivable'?'pelanggan':'supplier'])}</td><td class="num">${fmt(x.d.nominal)}</td><td class="num">${fmt(x.paid)}</td><td class="num">${fmt(x.balance)}</td><td>${x.status}</td></tr>`).join('')}</tbody></table></div>`;
@@ -208,6 +279,11 @@ function renderReport(kind){
       ${body}
       <footer class="print-footer"><span>Dokumen laporan internal • Kantin Uimsya Putri</span><span>Dicetak dari Sistem Keuangan</span></footer>
     </div>`;
+    // Bind period filter untuk laporan harian
+    if(kind==='daily'){
+      const rfEl=el.querySelector('#reportPeriodFilter');
+      if(rfEl)rfEl.onchange=()=>renderReport('daily');
+    }
   }
   function exportCSVRows(rows,name){if(!rows.length)return toast('Tidak ada data untuk diekspor.',true);const flat=rows.map(r=>r.d?({tanggal:r.tgl,...r.d}):r);const heads=[...new Set(flat.flatMap(x=>Object.keys(x)))];const csv='\ufeff'+[heads.join(','),...flat.map(x=>heads.map(h=>`"${String(x[h]??'').replace(/"/g,'""')}"`).join(','))].join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download=`${name}-${isoToday()}.csv`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1200)}
 
@@ -228,6 +304,9 @@ function renderReport(kind){
     $$('.report-card').forEach(b=>b.onclick=()=>renderReport(b.dataset.report));
     $('#mobileMenu').onclick=()=>$('.sidebar').classList.toggle('open');
     document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
+    // Period filter – riwayat harian
+    const dpfEl=$('#dailyPeriodFilter');
+    if(dpfEl)dpfEl.onchange=()=>renderDaily();
     // Holiday buttons
     const shBtn=$('#setHolidayBtn');
     if(shBtn)shBtn.onclick=()=>holidayModal($('#dailyDate').value||isoToday());

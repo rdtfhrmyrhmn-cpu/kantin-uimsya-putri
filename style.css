@@ -23,6 +23,19 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}.app-shell{min-h
 .row-libur td{opacity:.78}
 .row-libur .money{color:var(--muted)!important}
 
+/* ── Pengelompokan Bulan – tabel riwayat harian ── */
+.month-group-header td{background:rgba(0,91,150,.38)!important;color:var(--m);font-weight:800;font-size:11px;letter-spacing:.09em;padding:10px 12px!important;border-top:2px solid rgba(179,205,224,.25)!important;border-bottom:0!important}
+.month-subtotal td{background:rgba(255,255,255,.05)!important;font-size:12px;font-weight:700;border-top:1px dashed rgba(255,255,255,.18)!important;border-bottom:2px solid rgba(255,255,255,.12)!important;color:var(--text)}
+.month-subtotal .money{color:var(--good)!important;font-weight:800}
+.subtotal-pill{display:inline-flex;align-items:center;padding:2px 7px;border-radius:999px;font-size:9px;font-weight:700;background:var(--good-bg);color:var(--good)}
+.subtotal-pill.libur-pill{background:var(--danger-bg);color:#fecaca}
+
+/* ── Filter Periode – preview laporan harian ── */
+.period-filter-bar{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+.period-filter-bar span{color:var(--muted);font-size:12px;font-weight:700;white-space:nowrap}
+.period-filter-bar select{min-width:200px}
+.period-info{color:var(--muted);font-size:11px}
+
 @media print{
   @page{size:A4 portrait;margin:12mm 12mm 14mm}
   *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
@@ -64,15 +77,29 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}.app-shell{min-h
   .print-wide .print-header h3{font-size:16px}
   .empty{display:none!important}
   /* Laporan Harian: status badge & libur rows */
+  /* Status badge laporan */
   .print-status-badge{display:inline-block;padding:2px 6px;border-radius:3px;font-size:7.5px;font-weight:800;letter-spacing:.04em;border:1px solid currentColor}
   .print-status-badge.ops{color:#065f46;background:#d1fae5;border-color:#6ee7b7}
   .print-status-badge.libur{color:#991b1b;background:#fee2e2;border-color:#fca5a5}
   .row-libur td{background:#fff8f8!important;color:#6b2121!important;opacity:1!important}
   .row-libur .num{color:#9b3030!important}
-  /* 6-column summary for daily report */
+  /* Summary 6 kolom untuk laporan harian */
   .print-summary.wide{grid-template-columns:repeat(6,1fr)!important}
-  .daily-full-table th:nth-child(1){width:70px}
-  .daily-full-table th:nth-child(2){width:48px}
+  /* Kolom tabel laporan harian */
+  .daily-full-table th:nth-child(1){width:68px}
+  .daily-full-table th:nth-child(2){width:45px}
   .daily-full-table th:nth-child(3){width:72px}
+  /* ── Header bulan di print ── */
+  .print-month-header td{background:#1a3a6b!important;color:#fff!important;font-weight:800;font-size:8.5px!important;letter-spacing:.08em;padding:5px 6px!important;border-top:3px solid #0d1f3c!important;border-bottom:0!important}
+  /* ── Subtotal per bulan di print ── */
+  .print-month-subtotal td{background:#e8effa!important;color:#1a3a6b!important;font-weight:700;font-size:8px!important;border-top:1px solid #b3c6e0!important;border-bottom:1px solid #b3c6e0!important}
+  .print-month-subtotal .num{text-align:right}
+  /* ── Grand total di print ── */
+  .print-grand-total td{background:#0d1f3c!important;color:#fff!important;font-weight:800;font-size:8.5px!important;border-top:2px solid #0d1f3c!important}
+  .print-grand-total .num{color:#ffe7a8!important;text-align:right}
+  /* ── Sembunyikan filter periode saat print ── */
+  .no-print{display:none!important}
+  /* ── Filter periode di preview (jika tampak) ── */
+  .period-filter-bar select{background:#fff;color:#111;border:1px solid #ccc;border-radius:6px;padding:4px 8px}
 }
 
