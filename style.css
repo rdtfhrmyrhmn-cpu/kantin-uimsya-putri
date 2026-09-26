@@ -103,3 +103,35 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}.app-shell{min-h
   .period-filter-bar select{background:#fff;color:#111;border:1px solid #ccc;border-radius:6px;padding:4px 8px}
 }
 
+
+/* ── Role System Styles (v2) ─────────────────────────────────────── */
+.role-tag {
+  display:inline-block;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;
+  letter-spacing:.3px;vertical-align:middle;margin-left:5px;
+}
+.role-tag.admin { background:rgba(251,191,36,.2);color:#fbbf24;border:1px solid rgba(251,191,36,.3); }
+.role-tag.kasir { background:rgba(99,207,160,.15);color:#6bcf97;border:1px solid rgba(99,207,160,.25); }
+
+/* User topbar label dengan role */
+#userLabel { display:inline-flex;align-items:center;gap:0;flex-wrap:wrap; }
+
+/* Tabel pengguna */
+.row-inactive td { opacity:.45; }
+.row-inactive td:first-child b { text-decoration:line-through; }
+
+/* Pill warna role */
+.pill.admin { background:rgba(251,191,36,.15);color:#fbbf24; }
+.pill.kasir { background:rgba(99,207,160,.1);color:#6bcf97; }
+
+/* Notice warna kuning (warning) */
+.notice.warn {
+  background:rgba(180,120,0,.25);border-color:rgba(251,191,36,.3);
+  color:#fde68a;
+}
+
+/* User stats di halaman Pengguna */
+#userStats .stat { min-width:110px; }
+
+/* Form password di modal create user */
+#modalForm label { display:block;margin-bottom:14px; }
+#modalForm label small.muted { display:block;margin-top:2px;font-size:11px;font-weight:400;color:rgba(255,255,255,.45); }

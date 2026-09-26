@@ -13,31 +13,79 @@
     .logo-wrap{width:96px;height:96px;margin:0 auto 18px;display:grid;place-items:center;border-radius:24px;padding:9px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.22)}.logo{width:100%;height:100%;object-fit:contain;border-radius:18px}.fallback{display:none;font-size:42px}
     h1{margin:0;text-align:center;font-size:30px}.sub{text-align:center;color:var(--m);margin:10px 0 25px;font-size:14px}.field{margin-bottom:15px}.field label{display:block;margin-bottom:7px;font-size:13px;font-weight:700;color:#dbeafe}
     .wrap{position:relative}input{width:100%;border:1px solid rgba(255,255,255,.24);outline:0;border-radius:14px;padding:14px 15px;background:rgba(255,255,255,.1);color:#fff;font-size:15px}input:focus{border-color:var(--m);box-shadow:0 0 0 4px rgba(179,205,224,.12)}input::placeholder{color:rgba(255,255,255,.56)}.toggle{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:0;color:var(--m);cursor:pointer;padding:7px}
-    button.submit{width:100%;padding:14px;margin-top:5px;border:0;border-radius:14px;background:linear-gradient(135deg,var(--b),var(--n2));color:#fff;font-weight:800;cursor:pointer}.submit:disabled{opacity:.6;cursor:not-allowed}.msg{display:none;margin-top:13px;padding:11px 12px;border-radius:12px;font-size:13px;background:rgba(127,29,29,.35);color:#fecaca}.msg.show{display:block}.foot{text-align:center;color:rgba(255,255,255,.5);font-size:12px;margin-top:18px}
+    button.submit{width:100%;padding:14px;margin-top:5px;border:0;border-radius:14px;background:linear-gradient(135deg,var(--b),var(--n2));color:#fff;font-weight:800;cursor:pointer;font-size:15px;transition:.2s}.submit:hover{opacity:.9}.submit:disabled{opacity:.6;cursor:not-allowed}
+    .msg{display:none;margin-top:13px;padding:11px 12px;border-radius:12px;font-size:13px;background:rgba(127,29,29,.35);color:#fecaca}.msg.show{display:block}
+    .msg.warn{background:rgba(180,120,0,.3);color:#fde68a}
+    .foot{text-align:center;color:rgba(255,255,255,.5);font-size:12px;margin-top:18px}
   </style>
 </head>
 <body>
   <main class="page"><section class="card">
     <div class="logo-wrap"><img class="logo" src="assets/logo.png" alt="Logo Kantin" onerror="this.style.display='none';document.querySelector('.fallback').style.display='block'"><span class="fallback">🏪</span></div>
     <h1>Kantin Uimsya Putri</h1><div class="sub">Sistem Keuangan & Operasional Kantin</div>
+    <div class="msg" id="preMsg"></div>
     <form id="loginForm">
       <div class="field"><label for="username">Username</label><input id="username" autocomplete="username" placeholder="Masukkan username" required></div>
       <div class="field"><label for="password">Password</label><div class="wrap"><input id="password" type="password" autocomplete="current-password" placeholder="Masukkan password" required><button type="button" class="toggle" id="toggle">👁</button></div></div>
       <button class="submit" id="loginBtn" type="submit">Masuk</button>
       <div class="msg" id="loginMsg"></div>
     </form>
-    <div class="foot">Login menggunakan username. Email Auth hanya digunakan secara internal.</div>
+    <div class="foot">Login menggunakan username. Admin dapat membuat akun pengguna dari dalam aplikasi.</div>
   </section></main>
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase.js"></script>
   <script>
-    (()=>{
-      const form=document.getElementById('loginForm'),u=document.getElementById('username'),p=document.getElementById('password'),b=document.getElementById('loginBtn'),m=document.getElementById('loginMsg');
-      document.getElementById('toggle').onclick=()=>{const v=p.type==='password';p.type=v?'text':'password';document.getElementById('toggle').textContent=v?'🙈':'👁'};
-      const show=t=>{m.textContent=t;m.className='msg show'};
-      supabaseClient.auth.getSession().then(({data})=>{if(data.session) location.replace('app.html')}).catch(()=>{});
-      form.addEventListener('submit',async e=>{e.preventDefault();const username=u.value.trim(),password=p.value;if(!username||!password)return show('Username dan password wajib diisi.');const clean=username.toLowerCase().replace(/[^a-z0-9._-]/g,'');if(!clean)return show('Username tidak valid.');const email=clean+'@kantin-uimsya.local';b.disabled=true;b.textContent='Memeriksa...';m.className='msg';try{const {error}=await supabaseClient.auth.signInWithPassword({email,password});if(error)throw error;location.replace('app.html')}catch(err){console.error(err);show('Login gagal: '+(err.message||'Kredensial tidak sesuai.'))}finally{b.disabled=false;b.textContent='Masuk'}});
-    })();
+  (()=>{
+    const form=document.getElementById('loginForm'),
+          u=document.getElementById('username'),
+          p=document.getElementById('password'),
+          b=document.getElementById('loginBtn'),
+          m=document.getElementById('loginMsg'),
+          pre=document.getElementById('preMsg');
+
+    // Tampilkan pesan error dari URL param (redirect dari app)
+    const params=new URLSearchParams(location.search);
+    const errMap={
+      no_access:'⚠️ Akun Anda belum memiliki akses. Hubungi admin untuk mendapatkan akses.',
+      deactivated:'🚫 Akun Anda telah dinonaktifkan. Hubungi admin.',
+      session_expired:'🔒 Sesi berakhir. Silakan login kembali.'
+    };
+    const preErr=params.get('error');
+    if(preErr&&errMap[preErr]){pre.textContent=errMap[preErr];pre.className='msg warn show';}
+
+    document.getElementById('toggle').onclick=()=>{
+      const v=p.type==='password';
+      p.type=v?'text':'password';
+      document.getElementById('toggle').textContent=v?'🙈':'👁';
+    };
+
+    const show=t=>{m.textContent=t;m.className='msg show'};
+
+    supabaseClient.auth.getSession().then(({data})=>{
+      if(data.session) location.replace('app.html');
+    }).catch(()=>{});
+
+    form.addEventListener('submit',async e=>{
+      e.preventDefault();
+      const username=u.value.trim(),password=p.value;
+      if(!username||!password)return show('Username dan password wajib diisi.');
+      const clean=username.toLowerCase().replace(/[^a-z0-9._-]/g,'');
+      if(!clean)return show('Username tidak valid.');
+      const email=clean+'@kantin-uimsya.local';
+      b.disabled=true;b.textContent='Memeriksa...';m.className='msg';
+      try{
+        const {error}=await supabaseClient.auth.signInWithPassword({email,password});
+        if(error)throw error;
+        location.replace('app.html');
+      }catch(err){
+        console.error(err);
+        show('Login gagal: '+(err.message||'Kredensial tidak sesuai.'));
+      }finally{
+        b.disabled=false;b.textContent='Masuk';
+      }
+    });
+  })();
   </script>
 </body>
 </html>
