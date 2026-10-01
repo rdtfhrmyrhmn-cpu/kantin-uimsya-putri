@@ -169,11 +169,17 @@
       saveBtn.disabled=true;saveBtn.textContent='Menyimpan...';
       try{
         await onSave(new FormData(e.currentTarget));
-        closeModal();await refresh();toast('Data tersimpan.');
       }catch(err){
-        console.error(err);toast(err.message||'Gagal menyimpan data.',true);
+        /* Simpan gagal — tampilkan error & biarkan modal tetap terbuka */
+        console.error('[formModal] Save error:',err);
+        toast(err.message||'Gagal menyimpan data. Cek koneksi / RLS Supabase.',true);
         saveBtn.disabled=false;saveBtn.textContent='Simpan';
+        return; /* jangan tutup modal */
       }
+      /* Simpan berhasil — tutup modal & refresh tabel */
+      closeModal();
+      toast('Data tersimpan.');
+      refresh().catch(e=>console.warn('[refresh] Non-fatal error setelah simpan:',e));
     });
   }
   function closeModal(){$('#modalRoot').innerHTML='';state.editId=null;}
@@ -485,8 +491,43 @@
   function supplierModal(row){
     const d=row?data(row):{};
     formModal(row?'Edit Pemasok':'Tambah Pemasok',
-    `<div class="form-grid cols-2"><label>Nama Pemasok<input name="nama" value="${esc(d.nama||'')}" required></label><label>Kontak<input name="kontak" value="${esc(d.kontak||'')}"></label><label>Alamat<input name="alamat" value="${esc(d.alamat||'')}"></label><label>Keterangan<input name="keterangan" value="${esc(d.keterangan||'')}"></label></div>`,
-    async f=>{await writeRow(isoToday(),'pemasok',{nama:String(f.get('nama')),kontak:String(f.get('kontak')||''),alamat:String(f.get('alamat')||''),keterangan:String(f.get('keterangan')||'')},row?.record_id)});
+    `<div class="form-grid cols-2">
+      <label>Nama Pemasok <small style="font-weight:400;color:rgba(255,255,255,.4)">(wajib)</small>
+        <input name="nama" value="${esc(d.nama||'')}" placeholder="Contoh: Toko Sembako Jaya" required>
+      </label>
+      <label>Kontak / HP
+        <input name="kontak" value="${esc(d.kontak||'')}" placeholder="Contoh: 08123456789">
+      </label>
+      <label>Alamat
+        <input name="alamat" value="${esc(d.alamat||'')}" placeholder="Contoh: Jl. Mawar No. 5">
+      </label>
+      <label>Keterangan
+        <input name="keterangan" value="${esc(d.keterangan||'')}" placeholder="Contoh: Supplier bahan pokok">
+      </label>
+    </div>`,
+    async f=>{
+      const nama=String(f.get('nama')||'').trim();
+      if(!nama) throw new Error('Nama pemasok wajib diisi.');
+      const payload={
+        nama,
+        kontak:String(f.get('kontak')||'').trim(),
+        alamat:String(f.get('alamat')||'').trim(),
+        keterangan:String(f.get('keterangan')||'').trim()
+      };
+      if(row?.record_id){
+        /* Edit: update record yang ada */
+        const {error}=await db.from('kantin_data')
+          .update({data:payload,updated_at:new Date().toISOString()})
+          .eq('record_id',row.record_id);
+        if(error) throw new Error('Gagal update pemasok: '+error.message);
+      }else{
+        /* Baru: insert record baru */
+        const rid=`pemasok:${uid()}`;
+        const {error}=await db.from('kantin_data')
+          .insert({record_id:rid,tipe:'pemasok',tgl:isoToday(),data:payload,updated_at:new Date().toISOString()});
+        if(error) throw new Error('Gagal simpan pemasok: '+error.message);
+      }
+    });
   }
 
   /* ── Tabungan ────────────────────────────────────────────────────────────── */
@@ -730,12 +771,24 @@
     await loadRows();
     // Reload user roles jika di tab pengguna
     if(state.tab==='pengguna'){
-      const {data}=await db.from('kantin_user_roles').select('*');
-      if(data)state.userRoles=data;
+      try{
+        const {data}=await db.from('kantin_user_roles').select('*');
+        if(data)state.userRoles=data;
+      }catch(e){console.warn('[refresh] userRoles:',e);}
     }
-    renderHome();renderDashboard();renderTransactions();renderCash();renderDaily();renderReceivables();renderPayables();renderStock();renderSuppliers();renderSavings();
-    if(state.report)renderReport(state.report);
-    if(state.tab==='pengguna')renderUsers();
+    /* Tiap render dibungkus try-catch agar satu error tidak hentikan render lain */
+    const renders=[
+      ['renderHome',renderHome],['renderDashboard',renderDashboard],
+      ['renderTransactions',renderTransactions],['renderCash',renderCash],
+      ['renderDaily',renderDaily],['renderReceivables',renderReceivables],
+      ['renderPayables',renderPayables],['renderStock',renderStock],
+      ['renderSuppliers',renderSuppliers],['renderSavings',renderSavings]
+    ];
+    for(const [name,fn] of renders){
+      try{fn();}catch(e){console.warn(`[refresh] ${name} error:`,e);}
+    }
+    if(state.report){try{renderReport(state.report);}catch(e){console.warn('[refresh] renderReport:',e);}}
+    if(state.tab==='pengguna'){try{renderUsers();}catch(e){console.warn('[refresh] renderUsers:',e);}}
   }
 
   /* ── Event Binding ───────────────────────────────────────────────────────── */
