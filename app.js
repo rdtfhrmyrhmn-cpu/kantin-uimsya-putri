@@ -24,7 +24,8 @@
   const num=v=>Number(v)||0;
   const esc=s=>String(s??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
   const uid=()=>window.crypto?.randomUUID?.()||`${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  const isoToday=()=>new Date().toISOString().slice(0,10);
+  const ymd=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; /* tanggal LOKAL, bukan UTC */
+  const isoToday=()=>ymd(new Date());
   const isFriday=d=>new Date(`${d}T00:00:00`).getDay()===5;
   const dayNames=['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
   const getDayName=tgl=>dayNames[new Date(`${tgl}T00:00:00`).getDay()];
@@ -256,7 +257,7 @@
 
   /* ── Laporan Harian ─────────────────────────────────────────────────────── */
   function renderHome(){
-    const now=new Date(),mk=now.toISOString().slice(0,7),daily=byType('harian').filter(r=>monthKey(r.tgl)===mk),ex=byType('pengeluaran').filter(r=>monthKey(r.tgl)===mk),other=byType('pemasukan').filter(r=>monthKey(r.tgl)===mk);
+    const now=new Date(),mk=ymd(now).slice(0,7),daily=byType('harian').filter(r=>monthKey(r.tgl)===mk),ex=byType('pengeluaran').filter(r=>monthKey(r.tgl)===mk),other=byType('pemasukan').filter(r=>monthKey(r.tgl)===mk);
     let sales=0,save=0,dayNet=0,expense=0,otherIn=0;
     daily.forEach(r=>{const d=data(r);sales+=num(d.pend1)+num(d.pend2);save+=num(d.tabungan);dayNet+=totalDaily(d)});
     ex.forEach(r=>expense+=num(data(r).nominal));other.forEach(r=>otherIn+=num(data(r).nominal));
@@ -392,7 +393,7 @@
     let minDate=allTgl.reduce((a,b)=>a<b?a:b),maxDate=allTgl.reduce((a,b)=>a>b?a:b);
     if(filterPeriod){const [fy,fm]=filterPeriod.split('-').map(Number);const lastDay=new Date(fy,fm,0).getDate();const pStart=`${filterPeriod}-01`,pEnd=`${filterPeriod}-${String(lastDay).padStart(2,'0')}`;minDate=minDate>pStart?minDate:pStart;maxDate=maxDate<pEnd?maxDate:pEnd;if(minDate>maxDate)return[];}
     const result=[],cur=new Date(`${minDate}T00:00:00`),end=new Date(`${maxDate}T00:00:00`);
-    while(cur<=end){const tgl=cur.toISOString().slice(0,10);const harianRow=harian.find(r=>r.tgl===tgl);const liburRow=libur.find(r=>r.tgl===tgl);
+    while(cur<=end){const tgl=ymd(cur);const harianRow=harian.find(r=>r.tgl===tgl);const liburRow=libur.find(r=>r.tgl===tgl);
       if(harianRow){result.push({tgl,status:'OPERASIONAL',...data(harianRow)});}
       else if(liburRow){result.push({tgl,status:'LIBUR',keterangan:data(liburRow).keterangan||'',pend1:0,pend2:0,titip1:0,titip2:0,titip3:0,tabungan:0});}
       else if(liburJumat&&isFriday(tgl)){result.push({tgl,status:'LIBUR',keterangan:'Jumat libur otomatis',pend1:0,pend2:0,titip1:0,titip2:0,titip3:0,tabungan:0});}
@@ -440,7 +441,7 @@
   }
   function debtModal(kind){
     const isR=kind==='piutang',title=isR?'Tambah Piutang':'Tambah Hutang';
-    formModal(title,`<div class="form-grid cols-2"><label>Tanggal<input type="date" name="tgl" value="${isoToday()}" required></label><label>${isR?'Pelanggan':'Supplier'}<input name="party" required></label><label>Nominal<input type="number" name="nominal" min="0" step="100" required></label><label>Jatuh Tempo<input type="date" name="jatuh_tempo"></label><label class="full">Keterangan<textarea name="keterangan" rows="3"></textarea></label></div>`,
+    formModal(title,`<div class="form-grid cols-2"><label>Tanggal<input type="date" name="tgl" value="${isoToday()}" required></label><label>${isR?'Pelanggan':'Supplier'}<input name="party" required${isR?'':' list="supplierList" autocomplete="off"'}>${isR?'':supplierDatalist()}</label><label>Nominal<input type="number" name="nominal" min="0" step="100" required></label><label>Jatuh Tempo<input type="date" name="jatuh_tempo"></label><label class="full">Keterangan<textarea name="keterangan" rows="3"></textarea></label></div>`,
     async f=>{const tipe=isR?'piutang':'hutang';await writeRow(f.get('tgl'),tipe,{[isR?'pelanggan':'supplier']:String(f.get('party')),nominal:num(f.get('nominal')),jatuh_tempo:String(f.get('jatuh_tempo')||''),keterangan:String(f.get('keterangan')||'')})});
   }
   function paymentModal(kind,id){
@@ -471,32 +472,63 @@
   function stockModal(row){
     const d=row?data(row):{};
     formModal(row?'Edit Barang':'Tambah Barang',
-    `<div class="form-grid cols-2"><label>Nama Barang<input name="nama" value="${esc(d.nama||'')}" required></label><label>Kategori<input name="kategori" value="${esc(d.kategori||'Makanan/Minuman')}"></label><label>Supplier<input name="supplier" value="${esc(d.supplier||'')}"></label><label>Stok<input type="number" name="stok" min="0" step="1" value="${num(d.stok)}"></label><label>Harga Modal<input type="number" name="harga_modal" min="0" value="${num(d.harga_modal)}"></label><label>Harga Jual<input type="number" name="harga_jual" min="0" value="${num(d.harga_jual)}"></label><label>Minimum Stok<input type="number" name="minimum" min="0" value="${num(d.minimum)}"></label></div>`,
+    `<div class="form-grid cols-2"><label>Nama Barang<input name="nama" value="${esc(d.nama||'')}" required></label><label>Kategori<input name="kategori" value="${esc(d.kategori||'Makanan/Minuman')}"></label><label>Supplier<input name="supplier" value="${esc(d.supplier||'')}" list="supplierList" autocomplete="off">${supplierDatalist()}</label><label>Stok<input type="number" name="stok" min="0" step="1" value="${num(d.stok)}"></label><label>Harga Modal<input type="number" name="harga_modal" min="0" value="${num(d.harga_modal)}"></label><label>Harga Jual<input type="number" name="harga_jual" min="0" value="${num(d.harga_jual)}"></label><label>Minimum Stok<input type="number" name="minimum" min="0" value="${num(d.minimum)}"></label></div>`,
     async f=>{await writeRow(isoToday(),'persediaan',{nama:String(f.get('nama')),kategori:String(f.get('kategori')||''),supplier:String(f.get('supplier')||''),stok:num(f.get('stok')),harga_modal:num(f.get('harga_modal')),harga_jual:num(f.get('harga_jual')),minimum:num(f.get('minimum'))},row?.record_id)});
   }
 
   /* ── Pemasok ─────────────────────────────────────────────────────────────── */
+  const sKey=n=>String(n||'').trim().toLowerCase();
+  function supplierStats(name){
+    const k=sKey(name);
+    const items=byType('persediaan').filter(r=>sKey(data(r).supplier)===k);
+    const debts=payables().filter(r=>sKey(r.d.supplier)===k);
+    return{items:items.length,debtTotal:debts.reduce((a,r)=>a+num(r.d.nominal),0),debtBalance:debts.reduce((a,r)=>a+r.balance,0)};
+  }
+  function suppliersSorted(){
+    return byType('pemasok').slice().sort((a,b)=>String(data(a).nama||'').localeCompare(String(data(b).nama||''),'id'));
+  }
+  function supplierDatalist(){
+    return`<datalist id="supplierList">${suppliersSorted().map(r=>`<option value="${esc(data(r).nama)}"></option>`).join('')}</datalist>`;
+  }
   function renderSuppliers(){
-    const rows=byType('pemasok');
-    $('#supplierTable tbody').innerHTML=rows.map(r=>{const d=data(r);return`<tr>
-      <td>${esc(d.nama)}</td><td>${esc(d.kontak||'-')}</td><td>${esc(d.alamat||'-')}</td><td>${esc(d.keterangan||'-')}</td>
+    const q=($('#supplierSearch')?.value||'').toLowerCase().trim();
+    const all=suppliersSorted().map(r=>({r,d:data(r),s:supplierStats(data(r).nama)}));
+    const st=$('#supplierStats');
+    if(st)st.innerHTML=[
+      ['Jumlah Pemasok',String(all.length)],
+      ['Barang Terhubung',String(all.reduce((a,x)=>a+x.s.items,0))],
+      ['Pemasok Berhutang',String(all.filter(x=>x.s.debtBalance>0).length)],
+      ['Total Sisa Hutang',fmt(all.reduce((a,x)=>a+x.s.debtBalance,0))]
+    ].map(([l,v])=>`<div class="stat"><span>${l}</span><strong>${v}</strong></div>`).join('');
+    const rows=all.filter(x=>!q||[x.d.nama,x.d.kontak,x.d.alamat,x.d.keterangan].join(' ').toLowerCase().includes(q));
+    $('#supplierTable tbody').innerHTML=rows.map(({r,d,s:x})=>`<tr>
+      <td><b>${esc(d.nama)}</b></td><td>${esc(d.kontak||'-')}</td><td>${esc(d.alamat||'-')}</td><td>${esc(d.keterangan||'-')}</td>
+      <td>${x.items}</td><td class="money">${fmt(x.debtBalance)}</td>
       <td><div class="row-actions">
         <button class="icon-btn edit-supplier" data-id="${r.id}">Edit</button>
-        ${canDelete()?`<button class="icon-btn danger-text del" data-id="${r.id}">Hapus</button>`:''}
+        ${canDelete()?`<button class="icon-btn danger-text del-supplier" data-id="${r.id}" data-name="${esc(d.nama)}">Hapus</button>`:''}
       </div></td>
-    </tr>`}).join('')||'<tr><td colspan="5" class="empty">Belum ada pemasok.</td></tr>';
+    </tr>`).join('')||`<tr><td colspan="7" class="empty">${q?'Pemasok tidak ditemukan.':'Belum ada pemasok.'}</td></tr>`;
     $$('#supplierTable .edit-supplier').forEach(b=>b.onclick=()=>supplierModal(state.rows.find(r=>r.id===b.dataset.id)));
-    $$('#supplierTable .del').forEach(b=>b.onclick=()=>deleteConfirm(b.dataset.id));
+    $$('#supplierTable .del-supplier').forEach(b=>b.onclick=()=>{
+      if(!canDelete())return toast('Hanya admin yang dapat menghapus data.',true);
+      const s=supplierStats(b.dataset.name);
+      const msg=(s.items||s.debtBalance>0)
+        ?`Pemasok "${b.dataset.name}" masih terhubung dengan ${s.items} barang dan sisa hutang ${fmt(s.debtBalance)}.\n\nData barang/hutang TIDAK ikut terhapus, hanya daftar pemasok ini.\nLanjut hapus?`
+        :'Hapus pemasok ini? Tindakan tidak dapat dibatalkan.';
+      if(!confirm(msg))return;
+      deleteById(b.dataset.id).then(()=>refresh()).then(()=>toast('Pemasok dihapus.')).catch(e=>toast(e.message,true));
+    });
   }
   function supplierModal(row){
     const d=row?data(row):{};
     formModal(row?'Edit Pemasok':'Tambah Pemasok',
     `<div class="form-grid cols-2">
-      <label>Nama Pemasok <small style="font-weight:400;color:rgba(255,255,255,.4)">(wajib)</small>
+      <label>Nama Pemasok
         <input name="nama" value="${esc(d.nama||'')}" placeholder="Contoh: Toko Sembako Jaya" required>
       </label>
       <label>Kontak / HP
-        <input name="kontak" value="${esc(d.kontak||'')}" placeholder="Contoh: 08123456789">
+        <input name="kontak" value="${esc(d.kontak||'')}" placeholder="Contoh: 08123456789" inputmode="tel">
       </label>
       <label>Alamat
         <input name="alamat" value="${esc(d.alamat||'')}" placeholder="Contoh: Jl. Mawar No. 5">
@@ -504,28 +536,29 @@
       <label>Keterangan
         <input name="keterangan" value="${esc(d.keterangan||'')}" placeholder="Contoh: Supplier bahan pokok">
       </label>
-    </div>`,
+    </div>${row?'<div class="notice">Jika nama diubah, nama pemasok di data Persediaan dan Hutang ikut diperbarui.</div>':''}`,
     async f=>{
-      const nama=String(f.get('nama')||'').trim();
-      if(!nama) throw new Error('Nama pemasok wajib diisi.');
-      const payload={
-        nama,
-        kontak:String(f.get('kontak')||'').trim(),
-        alamat:String(f.get('alamat')||'').trim(),
-        keterangan:String(f.get('keterangan')||'').trim()
-      };
+      const nama=String(f.get('nama')||'').trim().replace(/\s+/g,' ');
+      if(!nama)throw new Error('Nama pemasok wajib diisi.');
+      if(byType('pemasok').some(r=>r.record_id!==row?.record_id&&sKey(data(r).nama)===sKey(nama)))
+        throw new Error(`Pemasok "${nama}" sudah ada.`);
+      const payload={nama,kontak:String(f.get('kontak')||'').trim(),alamat:String(f.get('alamat')||'').trim(),keterangan:String(f.get('keterangan')||'').trim()};
       if(row?.record_id){
-        /* Edit: update record yang ada */
-        const {error}=await db.from('kantin_data')
-          .update({data:payload,updated_at:new Date().toISOString()})
-          .eq('record_id',row.record_id);
-        if(error) throw new Error('Gagal update pemasok: '+error.message);
+        const {data:upd,error}=await db.from('kantin_data').update({data:payload,updated_at:new Date().toISOString()}).eq('record_id',row.record_id).select('id');
+        if(error)throw new Error('Gagal update pemasok: '+error.message);
+        if(!upd||!upd.length)throw new Error('Pemasok tidak ditemukan / tidak ada izin mengubah.');
+        const oldName=data(row).nama;
+        if(oldName!==nama){
+          /* sinkronkan nama di persediaan & hutang */
+          const linked=state.rows.filter(r=>['persediaan','hutang'].includes(r.tipe)&&sKey(data(r).supplier)===sKey(oldName));
+          for(const r of linked){
+            const {error:e2}=await db.from('kantin_data').update({data:{...data(r),supplier:nama},updated_at:new Date().toISOString()}).eq('record_id',r.record_id);
+            if(e2)throw new Error('Pemasok tersimpan, tetapi gagal memperbarui data terkait: '+e2.message);
+          }
+        }
       }else{
-        /* Baru: insert record baru */
-        const rid=`pemasok:${uid()}`;
-        const {error}=await db.from('kantin_data')
-          .insert({record_id:rid,tipe:'pemasok',tgl:isoToday(),data:payload,updated_at:new Date().toISOString()});
-        if(error) throw new Error('Gagal simpan pemasok: '+error.message);
+        const {error}=await db.from('kantin_data').insert({record_id:`pemasok:${uid()}`,tipe:'pemasok',tgl:isoToday(),data:payload,updated_at:new Date().toISOString()});
+        if(error)throw new Error('Gagal simpan pemasok: '+error.message);
       }
     });
   }
@@ -555,6 +588,7 @@
     if(kind==='receivable')return receivables();
     if(kind==='payable')return payables();
     if(kind==='saving')return cashEntries().filter(x=>x.source==='saving');
+    if(kind==='supplier')return suppliersSorted().map(r=>{const d=data(r),x=supplierStats(d.nama);return{tgl:'',nama:d.nama||'',kontak:d.kontak||'',alamat:d.alamat||'',items:x.items,debtBalance:x.debtBalance}});
     return[];
   }
   function dateKey(v){if(!v)return 0;const s=String(v).trim();const t=Date.parse(s);if(!Number.isNaN(t))return t;const m=s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);if(m){let y=+m[3];if(y<100)y+=2000;return new Date(y,+m[2]-1,+m[1]).getTime()}return 0;}
@@ -563,7 +597,7 @@
   function renderReport(kind){
     state.report=kind;
     const el=$('#reportPreview'),rows=sortChronological(reportData(kind),'tgl');
-    const reportNames={cash:'Buku Kas',profit:'Laba Rugi 12 Bulan',receivable:'Laporan Piutang',payable:'Laporan Hutang',saving:'Laporan Tabungan',daily:'Laporan Harian Kantin'};
+    const reportNames={cash:'Buku Kas',profit:'Laba Rugi 12 Bulan',receivable:'Laporan Piutang',payable:'Laporan Hutang',saving:'Laporan Tabungan',daily:'Laporan Harian Kantin',supplier:'Laporan Pemasok'};
     const reportName=reportNames[kind]||'Laporan Keuangan';
     const generated=new Date().toLocaleString('id-ID',{dateStyle:'long',timeStyle:'short'});
     let body='',summary='';
@@ -595,6 +629,9 @@
       const filterBar=`<div class="period-filter-bar no-print"><span>Filter Periode:</span><select id="reportPeriodFilter">${periodOptions}</select><span class="period-info">${allDates.length} hari · ${mkList.length} bulan ditampilkan</span></div>`;
       body=filterBar+`<div class="table-wrap"><table class="daily-full-table"><thead><tr><th>Tanggal</th><th>Hari</th><th>Status</th><th class="num">Pemasukan</th><th class="num">Pengeluaran</th><th class="num">Tabungan</th><th class="num">Total</th></tr></thead><tbody>${tbody||'<tr><td colspan="7" class="empty">Belum ada data.</td></tr>'}</tbody></table></div>`;
       summary=`<div class="print-summary wide"><div><span>Hari Operasional</span><b>${opsAll.length}</b></div><div><span>Hari Libur</span><b>${liburAll.length}</b></div><div><span>Total Pemasukan</span><b>${fmt(totalPemasukan)}</b></div><div><span>Total Pengeluaran</span><b>${fmt(totalPengeluaran)}</b></div><div><span>Total Tabungan</span><b>${fmt(totalTabungan)}</b></div><div><span>Total Bersih</span><b>${fmt(totalNet)}</b></div></div>`;
+    }else if(kind==='supplier'){
+      body=`<div class="table-wrap"><table><thead><tr><th>Pemasok</th><th>Kontak</th><th>Alamat</th><th class="num">Barang</th><th class="num">Sisa Hutang</th></tr></thead><tbody>${rows.map(x=>`<tr><td>${esc(x.nama)}</td><td>${esc(x.kontak||'-')}</td><td>${esc(x.alamat||'-')}</td><td class="num">${x.items}</td><td class="num">${fmt(x.debtBalance)}</td></tr>`).join('')||'<tr><td colspan="5" class="empty">Belum ada pemasok.</td></tr>'}</tbody></table></div>`;
+      summary=`<div class="print-summary"><div><span>Jumlah Pemasok</span><b>${rows.length}</b></div><div><span>Barang Terhubung</span><b>${rows.reduce((a,x)=>a+x.items,0)}</b></div><div><span>Pemasok Berhutang</span><b>${rows.filter(x=>x.debtBalance>0).length}</b></div><div><span>Total Sisa Hutang</span><b>${fmt(rows.reduce((a,x)=>a+x.debtBalance,0))}</b></div></div>`;
     }else if(kind==='receivable'||kind==='payable'){
       const r=rows,nominal=r.reduce((s,x)=>s+num(x.d.nominal),0),paid=r.reduce((s,x)=>s+num(x.paid),0),balance=r.reduce((s,x)=>s+num(x.balance),0);
       body=`<div class="table-wrap"><table><thead><tr><th>Tanggal</th><th>Nama</th><th>Nominal</th><th>Terbayar</th><th>Sisa</th><th>Status</th></tr></thead><tbody>${r.map(x=>`<tr><td>${x.tgl}</td><td>${esc(x.d[kind==='receivable'?'pelanggan':'supplier'])}</td><td class="num">${fmt(x.d.nominal)}</td><td class="num">${fmt(x.paid)}</td><td class="num">${fmt(x.balance)}</td><td>${x.status}</td></tr>`).join('')}</tbody></table></div>`;
@@ -610,6 +647,107 @@
       <footer class="print-footer"><span>Dokumen laporan internal • Kantin Uimsya Putri</span><span>Dicetak dari Sistem Keuangan</span></footer>
     </div>`;
     if(kind==='daily'){const rfEl=el.querySelector('#reportPeriodFilter');if(rfEl)rfEl.onchange=()=>renderReport('daily');}
+  }
+
+  /* ── Ekspor PDF (file .pdf langsung, via jsPDF + AutoTable) ──────────────── */
+  const rp=n=>'Rp '+new Intl.NumberFormat('id-ID',{maximumFractionDigits:0}).format(Number(n)||0);
+  function reportPdfModel(kind){
+    const rows=sortChronological(reportData(kind),'tgl');
+    const names={cash:'Buku Kas',profit:'Laba Rugi 12 Bulan',receivable:'Laporan Piutang',payable:'Laporan Hutang',saving:'Laporan Tabungan',daily:'Laporan Harian Kantin',supplier:'Laporan Pemasok'};
+    const m={title:names[kind]||'Laporan Keuangan',suffix:'',summary:[],head:[[]],body:[],num:[]};
+    if(kind==='cash'){
+      const masuk=rows.reduce((s,x)=>s+num(x.in),0),keluar=rows.reduce((s,x)=>s+num(x.out),0);
+      m.summary=[['Saldo Awal',rp(state.opening)],['Total Masuk',rp(masuk)],['Total Keluar',rp(keluar)],['Saldo Akhir',rp(state.opening+masuk-keluar)]];
+      m.head=[['Tanggal','Sumber','Keterangan','Masuk','Keluar']];m.num=[3,4];
+      m.body=rows.map(x=>[x.tgl,x.label,x.note||'',rp(x.in),rp(x.out)]);
+    }else if(kind==='profit'){
+      const sales=rows.reduce((s,x)=>s+num(x.sales),0),other=rows.reduce((s,x)=>s+num(x.otherIn),0),exp=rows.reduce((s,x)=>s+num(x.expense),0);
+      m.summary=[['Total Penjualan',rp(sales)],['Pendapatan Lain',rp(other)],['Total Beban',rp(exp)],['Laba Bersih',rp(sales+other-exp)]];
+      m.head=[['Bulan','Penjualan','Pend. Lain','Beban','Laba']];m.num=[1,2,3,4];
+      m.body=rows.map(x=>[monthName(x.key),rp(x.sales),rp(x.otherIn),rp(x.expense),rp(x.sales+x.otherIn-x.expense)]);
+    }else if(kind==='daily'){
+      const per=$('#reportPeriodFilter')?.value||'';
+      const all=generateFullDailyRange(per);
+      const ops=all.filter(x=>x.status==='OPERASIONAL'),lib=all.filter(x=>x.status==='LIBUR');
+      const tP=ops.reduce((s,x)=>s+num(x.pend1)+num(x.pend2),0),tT=ops.reduce((s,x)=>s+num(x.titip1)+num(x.titip2)+num(x.titip3),0),tS=ops.reduce((s,x)=>s+num(x.tabungan),0),tN=ops.reduce((s,x)=>s+totalDaily(x),0);
+      m.suffix=per?'-'+per:'';
+      if(per)m.title+=' — '+monthName(per);
+      m.summary=[['Hari Operasional',String(ops.length)],['Hari Libur',String(lib.length)],['Total Pemasukan',rp(tP)],['Total Pengeluaran',rp(tT)],['Total Tabungan',rp(tS)],['Total Bersih',rp(tN)]];
+      m.head=[['Tanggal','Hari','Status','Pemasukan','Pengeluaran','Tabungan','Total']];m.num=[3,4,5,6];
+      const mks=[...new Set(all.map(x=>x.tgl.slice(0,7)))].sort();
+      mks.forEach(mk=>{
+        let o=0,l=0,p=0,t=0,sv=0,n=0;
+        m.body.push([{content:monthName(mk),colSpan:7,styles:{fillColor:[26,58,107],textColor:255,fontStyle:'bold'}}]);
+        all.filter(x=>x.tgl.startsWith(mk)).forEach(x=>{
+          const lb=x.status==='LIBUR';
+          if(lb)l++;else{o++;p+=num(x.pend1)+num(x.pend2);t+=num(x.titip1)+num(x.titip2)+num(x.titip3);sv+=num(x.tabungan);n+=totalDaily(x);}
+          const row=[x.tgl,getDayName(x.tgl),x.status,lb?'-':rp(num(x.pend1)+num(x.pend2)),lb?'-':rp(num(x.titip1)+num(x.titip2)+num(x.titip3)),lb?'-':rp(x.tabungan),lb?'-':rp(totalDaily(x))];
+          m.body.push(lb?row.map(c=>({content:c,styles:{fillColor:[254,242,242],textColor:[153,27,27]}})):row);
+        });
+        const sub={fillColor:[232,239,250],textColor:[26,58,107],fontStyle:'bold'};
+        m.body.push([{content:'Subtotal '+monthName(mk),colSpan:2,styles:sub},{content:`${o} ops · ${l} libur`,styles:sub},{content:rp(p),styles:sub},{content:rp(t),styles:sub},{content:rp(sv),styles:sub},{content:rp(n),styles:sub}]);
+      });
+      if(all.length){const g={fillColor:[13,31,60],textColor:255,fontStyle:'bold'};
+        m.body.push([{content:'TOTAL KESELURUHAN',colSpan:2,styles:g},{content:`${ops.length} ops · ${lib.length} libur`,styles:g},{content:rp(tP),styles:g},{content:rp(tT),styles:g},{content:rp(tS),styles:g},{content:rp(tN),styles:g}]);}
+    }else if(kind==='receivable'||kind==='payable'){
+      const nm=kind==='receivable'?'pelanggan':'supplier';
+      m.summary=[['Total Nominal',rp(rows.reduce((s,x)=>s+num(x.d.nominal),0))],['Total Terbayar',rp(rows.reduce((s,x)=>s+num(x.paid),0))],['Total Sisa',rp(rows.reduce((s,x)=>s+num(x.balance),0))]];
+      m.head=[['Tanggal','Nama','Nominal','Terbayar','Sisa','Status']];m.num=[2,3,4];
+      m.body=rows.map(x=>[x.tgl,x.d[nm]||'',rp(x.d.nominal),rp(x.paid),rp(x.balance),x.status]);
+    }else if(kind==='supplier'){
+      m.summary=[['Jumlah Pemasok',String(rows.length)],['Barang Terhubung',String(rows.reduce((a,x)=>a+x.items,0))],['Pemasok Berhutang',String(rows.filter(x=>x.debtBalance>0).length)],['Total Sisa Hutang',rp(rows.reduce((a,x)=>a+x.debtBalance,0))]];
+      m.head=[['Pemasok','Kontak','Alamat','Barang','Sisa Hutang']];m.num=[3,4];
+      m.body=rows.map(x=>[x.nama,x.kontak||'-',x.alamat||'-',String(x.items),rp(x.debtBalance)]);
+    }else{
+      const masuk=rows.reduce((s,x)=>s+num(x.in),0),keluar=rows.reduce((s,x)=>s+num(x.out),0);
+      m.summary=[['Total Setoran',rp(masuk)],['Total Penarikan',rp(keluar)],['Selisih',rp(masuk-keluar)]];
+      m.head=[['Tanggal','Jenis','Keterangan','Nominal']];m.num=[3];
+      m.body=rows.map(x=>[x.tgl,x.label,x.note||'',rp(x.in||x.out)]);
+    }
+    return m;
+  }
+  function exportReportPDF(){
+    const kind=state.report;
+    if(!kind)return toast('Pilih jenis laporan terlebih dahulu.',true);
+    const JsPDF=window.jspdf&&window.jspdf.jsPDF;
+    if(!JsPDF)return toast('Library PDF belum termuat. Periksa koneksi internet lalu muat ulang halaman.',true);
+    const m=reportPdfModel(kind);
+    const doc=new JsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+    if(typeof doc.autoTable!=='function')return toast('Plugin tabel PDF belum termuat. Muat ulang halaman.',true);
+    const W=doc.internal.pageSize.getWidth(),M=12;
+    const generated=new Date().toLocaleString('id-ID',{dateStyle:'long',timeStyle:'short'});
+    doc.setTextColor(17);doc.setFont('helvetica','bold');doc.setFontSize(8);doc.text('KANTIN UIMSYA PUTRI',M,13);
+    doc.setFontSize(16);doc.text(m.title,M,20);
+    doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(100);
+    doc.text('Keuangan & Operasional',M,25);doc.text('Dicetak: '+generated,W-M,13,{align:'right'});
+    doc.setDrawColor(17);doc.setLineWidth(.6);doc.line(M,28,W-M,28);
+    let y=32;
+    const per=m.summary.length>4?3:m.summary.length,gap=3,bw=(W-2*M-gap*(per-1))/per;
+    m.summary.forEach((it,i)=>{
+      const col=i%per,rowI=Math.floor(i/per),x=M+col*(bw+gap),yy=y+rowI*14;
+      doc.setDrawColor(210);doc.setLineWidth(.2);doc.roundedRect(x,yy,bw,11.5,1.2,1.2);
+      doc.setFont('helvetica','normal');doc.setFontSize(6.5);doc.setTextColor(110);doc.text(String(it[0]).toUpperCase(),x+2,yy+4);
+      doc.setFontSize(9.5);doc.setFont('helvetica','bold');doc.setTextColor(17);doc.text(String(it[1]),x+2,yy+9);
+    });
+    y+=Math.ceil(m.summary.length/per)*14+1;
+    const colStyles={};m.num.forEach(i=>colStyles[i]={halign:'right'});
+    doc.autoTable({
+      startY:y,head:m.head,body:m.body.length?m.body:[[{content:'Belum ada data.',colSpan:m.head[0].length,styles:{halign:'center',textColor:120}}]],
+      theme:'grid',margin:{left:M,right:M,bottom:16},
+      styles:{fontSize:8,cellPadding:1.8,lineColor:[210,210,210],lineWidth:.1,textColor:[17,17,17],overflow:'linebreak'},
+      headStyles:{fillColor:[1,31,75],textColor:255,fontStyle:'bold'},
+      columnStyles:colStyles,
+      showHead:'everyPage'
+    });
+    const pages=doc.getNumberOfPages(),H=doc.internal.pageSize.getHeight();
+    for(let i=1;i<=pages;i++){
+      doc.setPage(i);doc.setFont('helvetica','normal');doc.setFontSize(7);doc.setTextColor(120);doc.setDrawColor(190);doc.setLineWidth(.2);
+      doc.line(M,H-12,W-M,H-12);
+      doc.text('Dokumen laporan internal - Kantin Uimsya Putri',M,H-8);
+      doc.text(`Halaman ${i} / ${pages}`,W-M,H-8,{align:'right'});
+    }
+    doc.save(`laporan-${kind}${m.suffix}-${isoToday()}.pdf`);
+    toast('PDF berhasil dibuat.');
   }
 
   /* ── Manajemen Pengguna (Admin only) ─────────────────────────────────────── */
@@ -830,6 +968,8 @@
 
     $('#changePassword').onclick=openPassword;
     $('#printReport').onclick=()=>window.print();
+    $('#exportPdf').onclick=()=>{try{exportReportPDF();}catch(e){console.error(e);toast('Gagal membuat PDF: '+e.message,true);}};
+    $('#supplierSearch')?.addEventListener('input',renderSuppliers);
 
     if(isAdmin()){
       $('#dangerReset').onclick=()=>resetAll().catch(e=>toast(e.message,true));

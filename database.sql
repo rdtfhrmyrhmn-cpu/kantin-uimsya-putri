@@ -58,6 +58,7 @@ DROP POLICY IF EXISTS "kantin_data_authenticated_select" ON kantin_data;
 DROP POLICY IF EXISTS "kantin_data_authenticated_insert" ON kantin_data;
 DROP POLICY IF EXISTS "kantin_data_authenticated_update" ON kantin_data;
 DROP POLICY IF EXISTS "kantin_data_authenticated_delete" ON kantin_data;
+DROP POLICY IF EXISTS "kantin_data_admin_delete" ON kantin_data;
 
 -- Semua user terotentikasi bisa baca
 CREATE POLICY "kantin_data_authenticated_select" ON kantin_data
