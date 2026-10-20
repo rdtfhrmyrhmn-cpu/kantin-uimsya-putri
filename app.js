@@ -12,6 +12,9 @@
     session:null,
     tab:'home',
     months:1,
+    period:(()=>{const v=localStorage.getItem('kantin_period');if(v===null){const n=new Date();return n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0');}return v==='all'?'':v;})(), // '' = semua periode, 'YYYY-MM' = satu bulan
+    dailyOverride:true, // sinkronkan filter Laporan Harian dengan periode global
+    noteKind:'',
     report:null,
     editId:null,
     opening:Number(localStorage.getItem('kantin_opening_balance')||0),
@@ -137,17 +140,68 @@
     if(error)throw error;
   }
 
+  /* ── Periode global (Beranda) ────────────────────────────────────────────── */
+  const inPeriod=tgl=>!state.period||String(tgl||'').startsWith(state.period);
+  const periodLabel=()=>state.period?monthName(state.period):'Semua periode';
+  function periodOptions(){
+    const set=new Set(state.rows.map(r=>String(r.tgl||'').slice(0,7)).filter(k=>/^\d{4}-\d{2}$/.test(k)));
+    set.add(ymd(new Date()).slice(0,7));
+    if(state.period)set.add(state.period);
+    return[...set].sort().reverse();
+  }
+  function fillPeriodSelect(sel){
+    if(!sel)return;
+    sel.innerHTML='<option value="all">📅 Semua periode</option>'+periodOptions().map(p=>`<option value="${p}">${monthName(p)}</option>`).join('');
+    sel.value=state.period||'all';
+  }
+  function updatePeriodUI(){
+    fillPeriodSelect($('#homePeriod'));fillPeriodSelect($('#expPeriod'));
+    $$('.pc-label').forEach(e=>e.textContent=periodLabel());
+    const hint=$('#periodHint');
+    if(hint)hint.textContent=state.period?`Menampilkan data ${periodLabel()}. Berlaku di Beranda, Transaksi, Pengeluaran, Buku Kas, Laporan Harian, dan Evaluasi.`:'Menampilkan seluruh data dari semua periode. Pilih satu bulan agar tampilan lebih ringkas.';
+    const list=periodOptions().slice().reverse(),i=list.indexOf(state.period);
+    const pv=$('#periodPrev'),nx=$('#periodNext');
+    if(pv)pv.disabled=!state.period||i<=0;
+    if(nx)nx.disabled=!state.period||i<0||i>=list.length-1;
+  }
+  function setPeriod(p){
+    state.period=p||'';
+    localStorage.setItem('kantin_period',p||'all');
+    state.dailyOverride=true;
+    renderAll();
+  }
+  function stepPeriod(dir){
+    if(!state.period)return;
+    const list=periodOptions().slice().reverse(),i=list.indexOf(state.period)+dir;
+    if(i<0||i>=list.length)return;
+    setPeriod(list[i]);
+  }
+  function periodTotals(){
+    const t={sales:0,otherIn:0,expense:0,withdraw:0,dayNet:0,opsDays:0};
+    state.rows.forEach(r=>{
+      if(!inPeriod(r.tgl))return;const d=data(r);
+      if(r.tipe==='harian'){t.sales+=num(d.pend1)+num(d.pend2);t.dayNet+=totalDaily(d);t.opsDays++;}
+      else if(r.tipe==='pemasukan')t.otherIn+=num(d.nominal);
+      else if(r.tipe==='pengeluaran')t.expense+=num(d.nominal);
+      else if(r.tipe==='penarikan')t.withdraw+=num(d.nominal);
+    });
+    t.profit=t.sales+t.otherIn-t.expense;
+    return t;
+  }
+
   /* ── Navigasi ────────────────────────────────────────────────────────────── */
   function nav(tab){
     state.tab=tab;
     $$('[data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
     $$('.page').forEach(p=>p.classList.toggle('active',p.id===`tab-${tab}`));
-    const titles={home:'Beranda',ringkasan:'Ringkasan',transaksi:'Transaksi',kas:'Buku Kas',harian:'Laporan Harian',piutang:'Piutang',hutang:'Hutang',persediaan:'Persediaan',pemasok:'Pemasok',tabungan:'Tabungan',laporan:'Laporan',pengguna:'Manajemen Pengguna',pengaturan:'Pengaturan'};
+    const titles={home:'Beranda',ringkasan:'Ringkasan',transaksi:'Transaksi',pengeluaran:'Pengeluaran',catatan:'Evaluasi dan Rekapitulasi',kas:'Buku Kas',harian:'Laporan Harian',piutang:'Piutang',hutang:'Hutang',persediaan:'Persediaan',pemasok:'Pemasok',tabungan:'Tabungan',laporan:'Laporan',pengguna:'Manajemen Pengguna',pengaturan:'Pengaturan'};
     $('#pageTitle').textContent=$(`[data-tab="${tab}"] span`)?.textContent||titles[tab]||tab;
     if(tab==='home')renderHome();
     if(tab==='ringkasan')renderDashboard();
     if(tab==='transaksi')renderTransactions();
     if(tab==='kas')renderCash();
+    if(tab==='pengeluaran')renderExpenses();
+    if(tab==='catatan')renderNotes();
     if(tab==='harian')renderDaily();
     if(tab==='piutang')renderReceivables();
     if(tab==='hutang')renderPayables();
@@ -188,6 +242,11 @@
   /* ── Transaksi ───────────────────────────────────────────────────────────── */
   function operationalLocked(date){return isExplicitHoliday(date)||(getLiburJumat()&&isFriday(date));}
 
+  function categoryOptions(){
+    const set=new Map([['operasional','Operasional']]);
+    [...byType('pengeluaran'),...byType('pemasukan')].forEach(r=>{const k=String(data(r).kategori||'').trim();if(k&&!set.has(k.toLowerCase()))set.set(k.toLowerCase(),k);});
+    return[...set.values()].sort((a,b)=>a.localeCompare(b,'id'));
+  }
   function openTransaction(type='pemasukan',row=null){
     const d=row?data(row):{};const today=row?.tgl||isoToday();
     formModal(row?'Edit Transaksi':'Transaksi Kas',
@@ -200,7 +259,7 @@
         <option value="setoran_tabungan" ${type==='setoran_tabungan'?'selected':''}>Setoran Tabungan</option>
         <option value="penarikan" ${type==='penarikan'?'selected':''}>Penarikan Tabungan</option>
       </select></label>
-      <label>Kategori<input name="kategori" value="${esc(d.kategori||'Operasional')}" placeholder="Contoh: Belanja bahan"></label>
+      <label>Kategori<input name="kategori" list="katList" autocomplete="off" value="${esc(d.kategori||'Operasional')}" placeholder="Contoh: Belanja bahan"><datalist id="katList">${categoryOptions().map(k=>`<option value="${esc(k)}">`).join('')}</datalist></label>
       <label>Akun Kas/Rekening<select name="akun">
         <option>Kas Kantin</option><option>Kas Kecil</option><option>Bank</option><option>E-Wallet</option><option>Tabungan</option>
       </select></label>
@@ -220,7 +279,7 @@
   function renderTransactions(){
     const q=($('#trxSearch')?.value||'').toLowerCase(),t=$('#trxType')?.value||'',from=$('#trxFrom')?.value||'',to=$('#trxTo')?.value||'';
     let rows=state.rows.filter(r=>['pemasukan','pengeluaran','transfer','setoran_tabungan','penarikan'].includes(r.tipe));
-    rows=rows.filter(r=>{const d=data(r),hay=[r.tgl,r.tipe,d.kategori,d.keterangan,d.no_transaksi,d.akun].join(' ').toLowerCase();return(!q||hay.includes(q))&&(!t||r.tipe===t)&&(!from||r.tgl>=from)&&(!to||r.tgl<=to)});
+    rows=rows.filter(r=>{const d=data(r),hay=[r.tgl,r.tipe,d.kategori,d.keterangan,d.no_transaksi,d.akun].join(' ').toLowerCase();return inPeriod(r.tgl)&&(!q||hay.includes(q))&&(!t||r.tipe===t)&&(!from||r.tgl>=from)&&(!to||r.tgl<=to)});
     $('#trxTable tbody').innerHTML=rows.map(r=>{const d=data(r);return`<tr>
       <td>${r.tgl}</td><td>${esc(d.no_transaksi||'-')}</td>
       <td><span class="pill">${typeLabel(r.tipe)}</span></td>
@@ -230,7 +289,7 @@
         <button class="icon-btn edit-trx" data-id="${r.id}">Edit</button>
         ${canDelete()?`<button class="icon-btn danger-text del" data-id="${r.id}">Hapus</button>`:''}
       </div></td>
-    </tr>`}).join('')||'<tr><td colspan="8" class="empty">Belum ada transaksi.</td></tr>';
+    </tr>`}).join('')||`<tr><td colspan="8" class="empty">Belum ada transaksi${state.period?' pada '+periodLabel():''}.</td></tr>`;
     $$('#trxTable .edit-trx').forEach(b=>b.onclick=()=>{const r=state.rows.find(x=>x.id===b.dataset.id);if(r)openTransaction(r.tipe,r)});
     $$('#trxTable .del').forEach(b=>b.onclick=()=>deleteConfirm(b.dataset.id));
   }
@@ -248,25 +307,26 @@
     return rows.sort((a,b)=>a.tgl.localeCompare(b.tgl));
   }
   function renderCash(){
-    const entries=cashEntries();let bal=state.opening,totalIn=0,totalOut=0;
-    const body=entries.map(x=>{bal+=x.in-x.out;totalIn+=x.in;totalOut+=x.out;return`<tr><td>${x.tgl}</td><td>${x.label}</td><td>${esc(x.note)}</td><td>${fmt(x.in)}</td><td>${fmt(x.out)}</td><td>${fmt(bal)}</td></tr>`}).join('');
+    const entries=cashEntries();
+    let opening=state.opening;
+    if(state.period)entries.filter(x=>x.tgl.slice(0,7)<state.period).forEach(x=>{opening+=x.in-x.out;}); /* saldo bulan-bulan sebelumnya dibawa */
+    const shown=entries.filter(x=>inPeriod(x.tgl));
+    let bal=opening,totalIn=0,totalOut=0;
+    const body=shown.map(x=>{bal+=x.in-x.out;totalIn+=x.in;totalOut+=x.out;return`<tr><td>${x.tgl}</td><td>${x.label}</td><td>${esc(x.note)}</td><td>${fmt(x.in)}</td><td>${fmt(x.out)}</td><td>${fmt(bal)}</td></tr>`}).join('');
     if($('#openingBalance'))$('#openingBalance').value=state.opening;
-    $('#cashStats').innerHTML=[['Saldo awal',state.opening],['Total masuk',totalIn],['Total keluar',totalOut],['Saldo akhir',bal]].map(([l,v])=>`<div class="stat"><span>${l}</span><strong>${fmt(v)}</strong></div>`).join('');
-    $('#cashTable tbody').innerHTML=body||'<tr><td colspan="6" class="empty">Belum ada arus kas.</td></tr>';
+    $('#cashStats').innerHTML=[[state.period?'Saldo awal periode':'Saldo awal',opening],['Total masuk',totalIn],['Total keluar',totalOut],['Saldo akhir',bal]].map(([l,v])=>`<div class="stat"><span>${l}</span><strong>${fmt(v)}</strong></div>`).join('');
+    $('#cashTable tbody').innerHTML=body||`<tr><td colspan="6" class="empty">Belum ada arus kas${state.period?' pada '+periodLabel():''}.</td></tr>`;
   }
 
   /* ── Laporan Harian ─────────────────────────────────────────────────────── */
   function renderHome(){
-    const now=new Date(),mk=ymd(now).slice(0,7),daily=byType('harian').filter(r=>monthKey(r.tgl)===mk),ex=byType('pengeluaran').filter(r=>monthKey(r.tgl)===mk),other=byType('pemasukan').filter(r=>monthKey(r.tgl)===mk);
-    let sales=0,save=0,dayNet=0,expense=0,otherIn=0;
-    daily.forEach(r=>{const d=data(r);sales+=num(d.pend1)+num(d.pend2);save+=num(d.tabungan);dayNet+=totalDaily(d)});
-    ex.forEach(r=>expense+=num(data(r).nominal));other.forEach(r=>otherIn+=num(data(r).nominal));
-    const profit=sales+otherIn-expense;
-    const p=state.rows.filter(r=>r.tipe==='penarikan').reduce((a,r)=>a+num(data(r).nominal),0);
-    const s=state.rows.filter(r=>r.tipe==='harian').reduce((a,r)=>a+num(data(r).tabungan),0)+state.rows.filter(r=>r.tipe==='setoran_tabungan').reduce((a,r)=>a+num(data(r).nominal),0);
-    const savings=s-p;
-    $('#homeStats').innerHTML=[['Penjualan bulan ini',sales],['Laba operasional',profit],['Saldo tabungan',savings],['Piutang tersisa',receivableTotal()]].map(([l,v])=>`<div class="stat"><span>${l}</span><strong>${fmt(v)}</strong></div>`).join('');
-    $('#homeMonth').innerHTML=`<div class="kpi-list"><div><span>Kas masuk dari laporan harian</span><b>${fmt(dayNet)}</b></div><div><span>Pengeluaran</span><b>${fmt(expense)}</b></div><div><span>Pendapatan lain</span><b>${fmt(otherIn)}</b></div><div><span>Tabungan aktif</span><b>${fmt(savings)}</b></div><div><span>Penarikan tabungan</span><b>${fmt(p)}</b></div></div>`;
+    const t=periodTotals();
+    const wdAll=state.rows.filter(r=>r.tipe==='penarikan').reduce((a,r)=>a+num(data(r).nominal),0);
+    const inAll=state.rows.filter(r=>r.tipe==='harian').reduce((a,r)=>a+num(data(r).tabungan),0)+state.rows.filter(r=>r.tipe==='setoran_tabungan').reduce((a,r)=>a+num(data(r).nominal),0);
+    const savings=inAll-wdAll; /* saldo tabungan = akumulasi seluruh waktu */
+    $('#homeStats').innerHTML=[['Penjualan periode',t.sales],['Laba operasional',t.profit],['Saldo tabungan (total)',savings],['Piutang tersisa (total)',receivableTotal()]].map(([l,v])=>`<div class="stat"><span>${l}</span><strong>${fmt(v)}</strong></div>`).join('');
+    const ttl=$('#homeMonthTitle');if(ttl)ttl.textContent='Ringkasan '+periodLabel();
+    $('#homeMonth').innerHTML=`<div class="kpi-list"><div><span>Kas masuk dari laporan harian</span><b>${fmt(t.dayNet)}</b></div><div><span>Pengeluaran</span><b>${fmt(t.expense)}</b></div><div><span>Pendapatan lain</span><b>${fmt(t.otherIn)}</b></div><div><span>Penarikan tabungan</span><b>${fmt(t.withdraw)}</b></div><div><span>Tabungan aktif (total)</span><b>${fmt(savings)}</b></div></div>`;
   }
 
   function monthlySummary(months=state.months){
@@ -305,8 +365,11 @@
     const libur=byLibur().map(r=>({...r,status:'LIBUR'}));
     const allRows=[...harian,...libur];
     const pfEl=$('#dailyPeriodFilter');
-    const prevPeriod=pfEl?.value||'';
-    const periods=[...new Set(allRows.map(r=>r.tgl.slice(0,7)))].sort().reverse();
+    let prevPeriod=pfEl?.value||'';
+    if(state.dailyOverride){prevPeriod=state.period;state.dailyOverride=false;}
+    const periods=[...new Set(allRows.map(r=>r.tgl.slice(0,7)))];
+    if(prevPeriod&&!periods.includes(prevPeriod))periods.push(prevPeriod);
+    periods.sort().reverse();
     if(pfEl){pfEl.innerHTML='<option value="">📅 Semua Periode</option>'+periods.map(p=>`<option value="${p}"${p===prevPeriod?' selected':''}>${monthName(p)}</option>`).join('');}
     const filterPeriod=pfEl?.value||'';
     const selected=$('#dailyDate');
@@ -587,10 +650,133 @@
   }
   function expenseByCategory(list){
     const m={};
-    list.forEach(r=>{const k=String(data(r).kategori||'').trim()||'Tanpa kategori';(m[k]=m[k]||{kat:k,total:0,n:0});m[k].total+=num(data(r).nominal);m[k].n++;});
+    list.forEach(r=>{const raw=String(data(r).kategori||'').trim()||'Tanpa kategori',k=raw.toLowerCase();(m[k]=m[k]||{kat:raw,total:0,n:0});m[k].total+=num(data(r).nominal);m[k].n++;});
     return Object.values(m).sort((a,b)=>b.total-a.total);
   }
   function expensePeriods(){return[...new Set(byType('pengeluaran').map(r=>r.tgl.slice(0,7)))].sort().reverse();}
+
+  /* ── Tab Pengeluaran ─────────────────────────────────────────────────────── */
+  function expenseSheetHTML(per){
+    const list=expenseList(per),cats=expenseByCategory(list);
+    const total=list.reduce((a,r)=>a+num(data(r).nominal),0);
+    const generated=new Date().toLocaleString('id-ID',{dateStyle:'long',timeStyle:'short'});
+    const label=per?monthName(per):'Semua Periode';
+    let tb='';
+    [...new Set(list.map(r=>r.tgl.slice(0,7)))].forEach(mk=>{
+      const mr=list.filter(r=>r.tgl.startsWith(mk));
+      tb+=`<tr class="print-month-header"><td colspan="6">📅 ${monthName(mk)}</td></tr>`;
+      mr.forEach(r=>{const d=data(r);tb+=`<tr><td>${r.tgl}</td><td>${esc(d.no_transaksi||'-')}</td><td>${esc(d.kategori||'-')}</td><td>${esc(d.akun||'-')}</td><td>${esc(d.keterangan||'-')}</td><td class="num">${fmt(d.nominal)}</td></tr>`;});
+      tb+=`<tr class="print-month-subtotal"><td colspan="5"><b>Subtotal ${monthName(mk)}</b> · ${mr.length} transaksi</td><td class="num"><b>${fmt(mr.reduce((a,r)=>a+num(data(r).nominal),0))}</b></td></tr>`;
+    });
+    if(list.length)tb+=`<tr class="print-grand-total"><td colspan="5"><b>TOTAL PENGELUARAN</b> · ${list.length} transaksi</td><td class="num"><b>${fmt(total)}</b></td></tr>`;
+    const catRows=cats.map(c=>`<tr><td>${esc(c.kat)}</td><td class="num">${c.n}</td><td class="num">${fmt(c.total)}</td><td class="num">${total?(c.total/total*100).toFixed(1):'0.0'}%</td></tr>`).join('');
+    const catTable=cats.length?`<h4 style="margin:0 0 6px;font-size:11px">Rekap Pengeluaran per Kategori</h4><div class="table-wrap"><table><thead><tr><th>Kategori</th><th class="num">Jumlah</th><th class="num">Total</th><th class="num">%</th></tr></thead><tbody>${catRows}<tr class="print-grand-total"><td><b>TOTAL</b></td><td class="num"><b>${list.length}</b></td><td class="num"><b>${fmt(total)}</b></td><td class="num"><b>100%</b></td></tr></tbody></table></div>`:'';
+    const summary=`<div class="print-summary"><div><span>Total Pengeluaran</span><b>${fmt(total)}</b></div><div><span>Jumlah Transaksi</span><b>${list.length}</b></div><div><span>Rata-rata / Transaksi</span><b>${fmt(list.length?total/list.length:0)}</b></div><div><span>Kategori Terbesar</span><b>${esc(cats[0]?cats[0].kat:'-')}</b></div></div>`;
+    return `<div class="print-sheet"><header class="print-header"><div class="print-brand-mark">KU</div><div><div class="print-kicker">KANTIN UIMSYA PUTRI</div><h3>Laporan Pengeluaran — ${label}</h3><p>Keuangan &amp; Operasional</p></div><div class="print-meta"><span>Dicetak</span><b>${generated}</b></div></header><div class="print-rule"></div>${summary}${catTable}<h4 style="margin:14px 0 6px;font-size:11px">Rincian Pengeluaran</h4><div class="table-wrap"><table><thead><tr><th>Tanggal</th><th>No. Transaksi</th><th>Kategori</th><th>Akun</th><th>Keterangan</th><th class="num">Nominal</th></tr></thead><tbody>${tb||'<tr><td colspan="6" class="empty">Belum ada pengeluaran.</td></tr>'}</tbody></table></div><footer class="print-footer"><span>Dokumen laporan internal • Kantin Uimsya Putri</span><span>Dicetak dari Sistem Keuangan</span></footer></div>`;
+  }
+  function renderExpenses(){
+    const per=state.period,list=expenseList(per),cats=expenseByCategory(list);
+    const total=list.reduce((a,r)=>a+num(data(r).nominal),0);
+    $('#expStats').innerHTML=[['Total pengeluaran',fmt(total)],['Jumlah transaksi',String(list.length)],['Rata-rata / transaksi',fmt(list.length?total/list.length:0)],['Kategori terbesar',cats[0]?esc(cats[0].kat):'-']].map(([l,v])=>`<div class="stat"><span>${l}</span><strong>${v}</strong></div>`).join('');
+    $('#expInfo').textContent=`${list.length} transaksi · ${cats.length} kategori`;
+    $('#expCatTable tbody').innerHTML=cats.map(c=>{const pct=total?c.total/total*100:0;return`<tr><td class="cat-name">${esc(c.kat)}</td><td>${c.n}</td><td class="money">${fmt(c.total)}</td><td>${pct.toFixed(1)}%</td><td><div class="bars"><i style="width:${pct}%"></i></div></td></tr>`}).join('')
+      +(cats.length?`<tr><td><b>TOTAL</b></td><td><b>${list.length}</b></td><td class="money">${fmt(total)}</td><td><b>100%</b></td><td></td></tr>`:'')
+      ||`<tr><td colspan="5" class="empty">Belum ada pengeluaran${per?' pada '+periodLabel():''}.</td></tr>`;
+    const desc=list.slice().reverse();
+    $('#expTable tbody').innerHTML=desc.map(r=>{const d=data(r);return`<tr><td>${r.tgl}</td><td>${esc(d.no_transaksi||'-')}</td><td><span class="pill">${esc(d.kategori||'-')}</span></td><td>${esc(d.akun||'-')}</td><td>${esc(d.keterangan||'-')}</td><td class="money">${fmt(d.nominal)}</td>
+      <td><div class="row-actions"><button class="icon-btn edit-exp" data-id="${r.id}">Edit</button>${canDelete()?`<button class="icon-btn danger-text del" data-id="${r.id}">Hapus</button>`:''}</div></td></tr>`}).join('')||`<tr><td colspan="7" class="empty">Belum ada pengeluaran${per?' pada '+periodLabel():''}.</td></tr>`;
+    $$('#expTable .edit-exp').forEach(b=>b.onclick=()=>{const r=state.rows.find(x=>x.id===b.dataset.id);if(r)openTransaction('pengeluaran',r)});
+    $$('#expTable .del').forEach(b=>b.onclick=()=>deleteConfirm(b.dataset.id));
+    const sheet=$('#expensePrintSheet');if(sheet)sheet.innerHTML=expenseSheetHTML(per);
+  }
+  function printExpense(){
+    renderExpenses();
+    document.body.dataset.printTarget='expense';
+    const done=()=>{delete document.body.dataset.printTarget;window.removeEventListener('afterprint',done)};
+    window.addEventListener('afterprint',done);
+    window.print();
+  }
+
+  /* ── Tab Evaluasi dan Rekapitulasi (buku catatan) ────────────────────────── */
+  const NOTE_KINDS={
+    keluhan:{label:'Keluhan Anggota',icon:'😟',statuses:['Baru','Dibahas','Selesai']},
+    target:{label:'Target Kantin',icon:'🎯',statuses:['Direncanakan','Berjalan','Tercapai']},
+    evaluasi:{label:'Evaluasi',icon:'📋',statuses:[]},
+    lain:{label:'Catatan Lain',icon:'🗒️',statuses:[]}
+  };
+  const noteKind=d=>NOTE_KINDS[d.jenis]?d.jenis:'lain';
+  /* Target yang belum tercapai selalu tampil, walau periodenya sudah lewat. */
+  const noteVisible=r=>{const d=data(r);return inPeriod(r.tgl)||(noteKind(d)==='target'&&d.status!=='Tercapai');};
+  function renderNotes(){
+    const t=periodTotals(),cats=expenseByCategory(expenseList(state.period));
+    $('#noteStats').innerHTML=[['Penjualan '+periodLabel(),fmt(t.sales)],['Pengeluaran',fmt(t.expense)],['Laba operasional',fmt(t.profit)],['Pengeluaran terbesar',cats[0]?`${esc(cats[0].kat)}<small class="muted" style="display:block;font-size:11px;font-weight:400;margin-top:2px">${fmt(cats[0].total)}</small>`:'-']].map(([l,v])=>`<div class="stat"><span>${l}</span><strong>${v}</strong></div>`).join('');
+    const all=byType('catatan').filter(noteVisible);
+    $$('#noteTabs button').forEach(b=>{
+      const k=b.dataset.kind,n=k?all.filter(r=>noteKind(data(r))===k).length:all.length;
+      b.classList.toggle('active',k===state.noteKind);
+      b.dataset.count=n;
+      b.textContent=b.textContent.replace(/\s*\(\d+\)$/,'')+` (${n})`;
+    });
+    const q=($('#noteSearch')?.value||'').toLowerCase();
+    const rows=all.filter(r=>{const d=data(r);return(!state.noteKind||noteKind(d)===state.noteKind)&&(!q||[d.judul,d.isi,d.dari,d.status].join(' ').toLowerCase().includes(q));})
+      .sort((a,b)=>b.tgl.localeCompare(a.tgl));
+    $('#noteGrid').innerHTML=rows.map(r=>{
+      const d=data(r),k=noteKind(d),K=NOTE_KINDS[k];
+      const meta=[];
+      if(k==='keluhan'&&d.dari)meta.push(`Dari: <b>${esc(d.dari)}</b>`);
+      if(k==='target'&&d.tenggat)meta.push(`Tenggat: <b>${esc(d.tenggat)}</b>`);
+      if(k==='target'&&num(d.nominal)>0)meta.push(`Target: <b>${fmt(d.nominal)}</b>`);
+      const statusSel=K.statuses.length?`<select class="note-status" data-id="${r.id}" title="Ubah status">${K.statuses.map(st=>`<option${(d.status||K.statuses[0])===st?' selected':''}>${st}</option>`).join('')}</select>`:'';
+      return`<article class="note k-${k}"><div class="note-top"><span class="note-tag">${K.icon} ${K.label.toUpperCase()}</span><small>${r.tgl}</small></div>
+        <h4>${esc(d.judul||'(tanpa judul)')}</h4>${meta.map(m=>`<div class="note-meta">${m}</div>`).join('')}
+        <div class="note-body">${esc(d.isi||'')}</div>
+        <div class="note-actions">${statusSel}<span class="spacer"></span><button class="icon-btn edit-note" data-id="${r.id}">Edit</button>${canDelete()?`<button class="icon-btn danger-text del-note" data-id="${r.id}">Hapus</button>`:''}</div></article>`;
+    }).join('')||`<div class="card empty" style="grid-column:1/-1">Belum ada catatan${state.period?' pada '+periodLabel():''}. Klik <b>+ Catatan Baru</b> untuk menulis keluhan, evaluasi, atau target kantin.</div>`;
+    $$('#noteGrid .edit-note').forEach(b=>b.onclick=()=>{const r=state.rows.find(x=>x.id===b.dataset.id);if(r)noteModal(r)});
+    $$('#noteGrid .del-note').forEach(b=>b.onclick=()=>deleteConfirm(b.dataset.id));
+    $$('#noteGrid .note-status').forEach(b=>b.onchange=async()=>{
+      const r=state.rows.find(x=>x.id===b.dataset.id);if(!r)return;
+      try{await writeRow(r.tgl,'catatan',{...data(r),status:b.value},r.record_id);await refresh();toast('Status diperbarui.');}
+      catch(e){toast(e.message||'Gagal memperbarui status.',true);}
+    });
+  }
+  function noteModal(row,presetKind){
+    const d=row?data(row):{};
+    formModal(row?'Edit Catatan':'Catatan Baru',
+    `<div class="form-grid cols-2">
+      <label>Jenis<select name="jenis" id="noteJenis">${Object.entries(NOTE_KINDS).map(([k,v])=>`<option value="${k}"${noteKind(d.jenis?d:{jenis:presetKind||'keluhan'})===k?' selected':''}>${v.icon} ${v.label}</option>`).join('')}</select></label>
+      <label>Tanggal<input type="date" name="tgl" value="${row?.tgl||isoToday()}" required></label>
+      <label class="full">Judul<input name="judul" value="${esc(d.judul||'')}" required maxlength="120" placeholder="Contoh: Antrean terlalu panjang saat istirahat"></label>
+      <label id="noteDariWrap">Dari (nama anggota)<input name="dari" value="${esc(d.dari||'')}" placeholder="Boleh dikosongkan"></label>
+      <label id="noteStatusWrap">Status<select name="status" id="noteStatus"></select></label>
+      <label id="noteTenggatWrap">Tenggat target<input type="date" name="tenggat" value="${esc(d.tenggat||'')}"></label>
+      <label id="noteNominalWrap">Target nominal (opsional)<input type="number" name="nominal" min="0" step="1000" value="${num(d.nominal)||''}" placeholder="Contoh: omzet / tabungan"></label>
+      <label class="full">Isi catatan<textarea name="isi" rows="7" placeholder="Tulis keluh kesah, hasil evaluasi, atau rencana target di sini...">${esc(d.isi||'')}</textarea></label>
+    </div>`,
+    async f=>{
+      const jenis=String(f.get('jenis')||'lain'),K=NOTE_KINDS[jenis]||NOTE_KINDS.lain;
+      const payload={jenis,judul:String(f.get('judul')||'').trim(),isi:String(f.get('isi')||''),
+        dari:jenis==='keluhan'?String(f.get('dari')||'').trim():'',
+        status:K.statuses.length?String(f.get('status')||K.statuses[0]):'',
+        tenggat:jenis==='target'?String(f.get('tenggat')||''):'',
+        nominal:jenis==='target'?num(f.get('nominal')):0,
+        user:state.session.user.email?.split('@')[0]||'user'};
+      if(!payload.judul)throw new Error('Judul wajib diisi.');
+      await writeRow(f.get('tgl'),'catatan',payload,row?.record_id);
+    });
+    const root=$('#modalRoot'),jenisEl=root.querySelector('#noteJenis');
+    const sync=()=>{
+      const k=jenisEl.value,K=NOTE_KINDS[k]||NOTE_KINDS.lain,st=root.querySelector('#noteStatus');
+      const keep=st.value||d.status||'';
+      st.innerHTML=K.statuses.map(x=>`<option${x===keep?' selected':''}>${x}</option>`).join('');
+      root.querySelector('#noteDariWrap').style.display=k==='keluhan'?'':'none';
+      root.querySelector('#noteStatusWrap').style.display=K.statuses.length?'':'none';
+      root.querySelector('#noteTenggatWrap').style.display=k==='target'?'':'none';
+      root.querySelector('#noteNominalWrap').style.display=k==='target'?'':'none';
+    };
+    jenisEl.onchange=()=>{root.querySelector('#noteStatus').innerHTML='';sync();};
+    sync();
+  }
 
   /* ── Laporan ─────────────────────────────────────────────────────────────── */
   function reportData(kind){
@@ -681,7 +867,7 @@
 
   /* ── Ekspor PDF (file .pdf langsung, via jsPDF + AutoTable) ──────────────── */
   const rp=n=>'Rp '+new Intl.NumberFormat('id-ID',{maximumFractionDigits:0}).format(Number(n)||0);
-  function reportPdfModel(kind){
+  function reportPdfModel(kind,opts){
     const rows=sortChronological(reportData(kind),'tgl');
     const names={cash:'Buku Kas',profit:'Laba Rugi 12 Bulan',receivable:'Laporan Piutang',payable:'Laporan Hutang',saving:'Laporan Tabungan',daily:'Laporan Harian Kantin',supplier:'Laporan Pemasok',expense:'Laporan Pengeluaran'};
     const m={title:names[kind]||'Laporan Keuangan',suffix:'',summary:[],head:[[]],body:[],num:[]};
@@ -725,11 +911,11 @@
       m.head=[['Tanggal','Nama','Nominal','Terbayar','Sisa','Status']];m.num=[2,3,4];
       m.body=rows.map(x=>[x.tgl,x.d[nm]||'',rp(x.d.nominal),rp(x.paid),rp(x.balance),x.status]);
         }else if(kind==='expense'){
-      const per=$('#reportPeriodFilter')?.value||'';
+      const per=opts&&opts.period!==undefined?opts.period:($('#reportPeriodFilter')?.value||'');
       const list=expenseList(per),cats=expenseByCategory(list);
       const total=list.reduce((a,r)=>a+num(data(r).nominal),0);
       m.suffix=per?'-'+per:'';
-      if(per)m.title+=' — '+monthName(per);
+      m.title+=' — '+(per?monthName(per):'Semua Periode');
       m.summary=[['Total Pengeluaran',rp(total)],['Jumlah Transaksi',String(list.length)],['Rata-rata / Transaksi',rp(list.length?total/list.length:0)],['Kategori Terbesar',cats[0]?cats[0].kat:'-']];
       m.head=[['Tanggal','No. Transaksi','Kategori','Akun','Keterangan','Nominal']];m.num=[5];
       [...new Set(list.map(r=>r.tgl.slice(0,7)))].forEach(mk=>{
@@ -741,7 +927,7 @@
       });
       if(list.length){const g={fillColor:[13,31,60],textColor:255,fontStyle:'bold'};
         m.body.push([{content:`TOTAL PENGELUARAN (${list.length} transaksi)`,colSpan:5,styles:g},{content:rp(total),styles:{...g,halign:'right'}}]);}
-      if(cats.length)m.extra={title:'Rekap per Kategori',head:[['Kategori','Jumlah','Total','%']],num:[1,2,3],body:cats.map(c=>[c.kat,String(c.n),rp(c.total),(total?(c.total/total*100).toFixed(1):'0.0')+'%'])};
+      if(cats.length){m.extra={title:'Rekap Pengeluaran per Kategori',head:[['Kategori','Jumlah','Total','%']],num:[1,2,3],body:[...cats.map(c=>[c.kat,String(c.n),rp(c.total),(total?(c.total/total*100).toFixed(1):'0.0')+'%']),[{content:'TOTAL',styles:{fontStyle:'bold',fillColor:[232,239,250]}},{content:String(list.length),styles:{fontStyle:'bold',fillColor:[232,239,250]}},{content:rp(total),styles:{fontStyle:'bold',fillColor:[232,239,250]}},{content:'100%',styles:{fontStyle:'bold',fillColor:[232,239,250]}}]]};m.extraFirst=true;m.mainTitle='Rincian Pengeluaran';}
     }else if(kind==='supplier'){
       m.summary=[['Jumlah Pemasok',String(rows.length)],['Barang Terhubung',String(rows.reduce((a,x)=>a+x.items,0))],['Pemasok Berhutang',String(rows.filter(x=>x.debtBalance>0).length)],['Total Sisa Hutang',rp(rows.reduce((a,x)=>a+x.debtBalance,0))]];
       m.head=[['Pemasok','Kontak','Alamat','Barang','Sisa Hutang']];m.num=[3,4];
@@ -754,12 +940,12 @@
     }
     return m;
   }
-  function exportReportPDF(){
-    const kind=state.report;
+  function exportReportPDF(kindArg,opts){
+    const kind=kindArg||state.report;
     if(!kind)return toast('Pilih jenis laporan terlebih dahulu.',true);
     const JsPDF=window.jspdf&&window.jspdf.jsPDF;
     if(!JsPDF)return toast('Library PDF belum termuat. Periksa koneksi internet lalu muat ulang halaman.',true);
-    const m=reportPdfModel(kind);
+    const m=reportPdfModel(kind,opts);
     const doc=new JsPDF({orientation:'portrait',unit:'mm',format:'a4'});
     if(typeof doc.autoTable!=='function')return toast('Plugin tabel PDF belum termuat. Muat ulang halaman.',true);
     const W=doc.internal.pageSize.getWidth(),M=12;
@@ -779,24 +965,31 @@
     });
     y+=Math.ceil(m.summary.length/per)*14+1;
     const colStyles={};m.num.forEach(i=>colStyles[i]={halign:'right'});
-    doc.autoTable({
-      startY:y,head:m.head,body:m.body.length?m.body:[[{content:'Belum ada data.',colSpan:m.head[0].length,styles:{halign:'center',textColor:120}}]],
-      theme:'grid',margin:{left:M,right:M,bottom:16},
-      styles:{fontSize:8,cellPadding:1.8,lineColor:[210,210,210],lineWidth:.1,textColor:[17,17,17],overflow:'linebreak'},
-      headStyles:{fillColor:[1,31,75],textColor:255,fontStyle:'bold'},
-      columnStyles:colStyles,
-      showHead:'everyPage'
-    });
-    if(m.extra){
+    const H=doc.internal.pageSize.getHeight();
+    const drawMain=startY=>{
+      let y0=startY;
+      if(m.mainTitle){if(y0>H-40){doc.addPage();y0=16;}doc.setFont('helvetica','bold');doc.setFontSize(10);doc.setTextColor(17);doc.text(m.mainTitle,M,y0);y0+=3;}
+      doc.autoTable({
+        startY:y0,head:m.head,body:m.body.length?m.body:[[{content:'Belum ada data.',colSpan:m.head[0].length,styles:{halign:'center',textColor:120}}]],
+        theme:'grid',margin:{left:M,right:M,bottom:16},
+        styles:{fontSize:8,cellPadding:1.8,lineColor:[210,210,210],lineWidth:.1,textColor:[17,17,17],overflow:'linebreak'},
+        headStyles:{fillColor:[1,31,75],textColor:255,fontStyle:'bold'},
+        columnStyles:colStyles,
+        showHead:'everyPage'
+      });
+    };
+    const drawExtra=startY=>{
       const ex=m.extra,exCol={};ex.num.forEach(i=>exCol[i]={halign:'right'});
-      let y2=doc.lastAutoTable.finalY+8;
-      if(y2>doc.internal.pageSize.getHeight()-50){doc.addPage();y2=16;}
+      let y2=startY;
+      if(y2>H-50){doc.addPage();y2=16;}
       doc.setFont('helvetica','bold');doc.setFontSize(10);doc.setTextColor(17);doc.text(ex.title,M,y2);
       doc.autoTable({startY:y2+3,head:ex.head,body:ex.body,theme:'grid',margin:{left:M,right:M,bottom:16},
         styles:{fontSize:8,cellPadding:1.8,lineColor:[210,210,210],lineWidth:.1,textColor:[17,17,17]},
         headStyles:{fillColor:[1,31,75],textColor:255,fontStyle:'bold'},columnStyles:exCol});
-    }
-    const pages=doc.getNumberOfPages(),H=doc.internal.pageSize.getHeight();
+    };
+    if(m.extra&&m.extraFirst){drawExtra(y);drawMain(doc.lastAutoTable.finalY+9);}
+    else{drawMain(y);if(m.extra)drawExtra(doc.lastAutoTable.finalY+8);}
+    const pages=doc.getNumberOfPages();
     for(let i=1;i<=pages;i++){
       doc.setPage(i);doc.setFont('helvetica','normal');doc.setFontSize(7);doc.setTextColor(120);doc.setDrawColor(190);doc.setLineWidth(.2);
       doc.line(M,H-12,W-M,H-12);
@@ -962,6 +1155,23 @@
     await refresh();toast('Semua data transaksi dihapus.');
   }
 
+  function renderAll(){
+    /* Tiap render dibungkus try-catch agar satu error tidak hentikan render lain */
+    try{updatePeriodUI();}catch(e){console.warn('[render] updatePeriodUI error:',e);}
+    const renders=[
+      ['renderHome',renderHome],['renderDashboard',renderDashboard],
+      ['renderTransactions',renderTransactions],['renderExpenses',renderExpenses],['renderCash',renderCash],
+      ['renderDaily',renderDaily],['renderReceivables',renderReceivables],
+      ['renderPayables',renderPayables],['renderStock',renderStock],
+      ['renderSuppliers',renderSuppliers],['renderSavings',renderSavings],
+      ['renderNotes',renderNotes]
+    ];
+    for(const [name,fn] of renders){
+      try{fn();}catch(e){console.warn(`[render] ${name} error:`,e);}
+    }
+    if(state.report){try{renderReport(state.report);}catch(e){console.warn('[render] renderReport:',e);}}
+    if(state.tab==='pengguna'){try{renderUsers();}catch(e){console.warn('[render] renderUsers:',e);}}
+  }
   async function refresh(){
     await loadRows();
     // Reload user roles jika di tab pengguna
@@ -971,19 +1181,7 @@
         if(data)state.userRoles=data;
       }catch(e){console.warn('[refresh] userRoles:',e);}
     }
-    /* Tiap render dibungkus try-catch agar satu error tidak hentikan render lain */
-    const renders=[
-      ['renderHome',renderHome],['renderDashboard',renderDashboard],
-      ['renderTransactions',renderTransactions],['renderCash',renderCash],
-      ['renderDaily',renderDaily],['renderReceivables',renderReceivables],
-      ['renderPayables',renderPayables],['renderStock',renderStock],
-      ['renderSuppliers',renderSuppliers],['renderSavings',renderSavings]
-    ];
-    for(const [name,fn] of renders){
-      try{fn();}catch(e){console.warn(`[refresh] ${name} error:`,e);}
-    }
-    if(state.report){try{renderReport(state.report);}catch(e){console.warn('[refresh] renderReport:',e);}}
-    if(state.tab==='pengguna'){try{renderUsers();}catch(e){console.warn('[refresh] renderUsers:',e);}}
+    renderAll();
   }
 
   /* ── Event Binding ───────────────────────────────────────────────────────── */
@@ -1011,6 +1209,25 @@
 
     ['trxSearch','trxType','trxFrom','trxTo'].forEach(id=>$('#'+id)?.addEventListener('input',renderTransactions));
     $('#resetTrx').onclick=()=>{['trxSearch','trxFrom','trxTo'].forEach(id=>$('#'+id).value='');$('#trxType').value='';renderTransactions()};
+
+    /* Periode global */
+    $('#homePeriod')?.addEventListener('change',e=>setPeriod(e.target.value==='all'?'':e.target.value));
+    $('#expPeriod')?.addEventListener('change',e=>setPeriod(e.target.value==='all'?'':e.target.value));
+    $('#periodPrev')?.addEventListener('click',()=>stepPeriod(-1));
+    $('#periodNext')?.addEventListener('click',()=>stepPeriod(1));
+    $('#periodNow')?.addEventListener('click',()=>setPeriod(ymd(new Date()).slice(0,7)));
+    $$('.period-chip').forEach(b=>b.addEventListener('click',()=>nav('home')));
+
+    /* Tab Pengeluaran */
+    $('#addExpense').onclick=()=>openTransaction('pengeluaran');
+    $('#printExpense').onclick=printExpense;
+    $('#pdfExpense').onclick=()=>{try{exportReportPDF('expense',{period:state.period});}catch(e){console.error(e);toast('Gagal membuat PDF: '+e.message,true);}};
+    $('#csvExpense').onclick=()=>exportCSVRows(expenseList(state.period).map(r=>({tgl:r.tgl,d:data(r)})),'pengeluaran'+(state.period?'-'+state.period:''));
+
+    /* Tab Evaluasi dan Rekapitulasi */
+    $('#addNote').onclick=()=>noteModal(null,state.noteKind||'keluhan');
+    $$('#noteTabs button').forEach(b=>b.onclick=()=>{state.noteKind=b.dataset.kind;renderNotes();});
+    $('#noteSearch')?.addEventListener('input',renderNotes);
 
     $('#refreshBtn').onclick=()=>refresh().then(()=>toast('Data diperbarui.')).catch(e=>toast(e.message,true));
     $('#logoutBtn').onclick=async()=>{await db.auth.signOut();location.replace('index.html')};

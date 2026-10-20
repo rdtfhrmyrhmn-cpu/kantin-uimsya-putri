@@ -135,3 +135,42 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}.app-shell{min-h
 /* Form password di modal create user */
 #modalForm label { display:block;margin-bottom:14px; }
 #modalForm label small.muted { display:block;margin-top:2px;font-size:11px;font-weight:400;color:rgba(255,255,255,.45); }
+
+
+/* ── v3: Periode, Pengeluaran, Evaluasi & Rekapitulasi ───────────────────── */
+.period-card{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:16px 0}
+.period-card .pc-title b{display:block;font-size:15px}
+.period-card .pc-title small{display:block;color:var(--muted);font-size:12px;margin-top:3px;max-width:520px;line-height:1.5}
+.period-card .pc-ctrl{display:flex;gap:8px;align-items:center;margin-left:auto;flex-wrap:wrap}
+.period-card select{width:auto;min-width:200px}
+.period-chip{display:inline-flex;align-items:center;gap:4px;margin:8px 0 0;padding:5px 11px;border-radius:999px;border:1px solid rgba(179,205,224,.28);background:rgba(179,205,224,.1);color:#d7efff;font-size:12px;font-weight:700}
+.period-chip:hover{background:rgba(179,205,224,.2)}
+.section-head .period-chip{display:flex;width:fit-content}
+#expensePrintSheet{display:none}
+#expCatTable .bars{height:12px}
+#expCatTable td.cat-name{font-weight:700;white-space:normal}
+
+/* Buku catatan */
+.notes-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:14px;align-items:start}
+.note{--nc:#6497b1;position:relative;padding:14px 16px 12px 18px;border-radius:14px;border:1px solid var(--border);border-left:5px solid var(--nc);
+  background:repeating-linear-gradient(to bottom,transparent 0,transparent 25px,rgba(255,255,255,.07) 25px,rgba(255,255,255,.07) 26px),var(--glass);box-shadow:var(--shadow)}
+.note.k-keluhan{--nc:#f59e0b}.note.k-target{--nc:#22c55e}.note.k-evaluasi{--nc:#a78bfa}
+.note-top{display:flex;justify-content:space-between;align-items:center;gap:8px;line-height:26px}
+.note-top small{color:var(--muted);font-size:11px}
+.note-tag{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:800;color:var(--nc);letter-spacing:.03em}
+.note h4{margin:0;font-size:15px;line-height:26px}
+.note-meta{font-size:12px;color:var(--muted);line-height:26px}
+.note-meta b{color:#e6f1fb}
+.note-body{white-space:pre-wrap;word-break:break-word;line-height:26px;font-size:13px;margin:0 0 6px}
+.note-actions{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:8px;padding-top:8px;border-top:1px dashed rgba(255,255,255,.14)}
+.note-actions select{width:auto;padding:5px 8px;font-size:12px;border-radius:9px}
+.note-actions .spacer{flex:1}
+@media(max-width:820px){.period-card .pc-ctrl{margin-left:0;width:100%}.period-card select{flex:1;min-width:0}.notes-grid{grid-template-columns:1fr}#noteTabs{flex-wrap:wrap}}
+
+@media print{
+  body[data-print-target="expense"] #tab-laporan{display:none!important}
+  body[data-print-target="expense"] #tab-pengeluaran{display:block!important}
+  body[data-print-target="expense"] .exp-screen{display:none!important}
+  body[data-print-target="expense"] #expensePrintSheet{display:block!important;width:100%;background:#fff}
+  .period-card,.period-chip,.notes-grid{display:none!important}
+}

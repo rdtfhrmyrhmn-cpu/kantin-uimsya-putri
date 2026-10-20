@@ -9,6 +9,30 @@
 
 ---
 
+## Fitur Baru v3 (tidak perlu mengubah database)
+
+Semua fitur di bawah memakai tabel `kantin_data` yang sudah ada, jadi **tidak perlu menjalankan ulang `database.sql`**.
+
+### 1. Kolom Periode di Beranda
+- Pilih bulan di kartu **📅 Periode** (tombol ◀ ▶ untuk pindah bulan, **Bulan ini** untuk kembali, atau **Semua periode**).
+- Pilihan tersimpan di browser. Bawaan: bulan berjalan.
+- Periode berlaku di: Beranda, Transaksi, Pengeluaran, Buku Kas (saldo bulan-bulan sebelumnya otomatis dibawa sebagai *saldo awal periode*), Laporan Harian, dan Evaluasi.
+- Tetap menampilkan total keseluruhan (bukan per periode): saldo tabungan, piutang, hutang, persediaan.
+
+### 2. Tab Pengeluaran
+- Rekap per kategori (jumlah, total, persentase, grafik proporsi) + rincian transaksi.
+- Tombol **Cetak**, **PDF**, dan **CSV** mengikuti periode yang dipilih.
+- Nama kategori tidak lagi peka huruf besar/kecil ("Belanja bahan" = "belanja bahan"), dan form transaksi menyarankan kategori yang pernah dipakai.
+
+### 3. Tab Evaluasi & Rekapitulasi (buku catatan)
+- Empat jenis catatan: **Keluhan Anggota**, **Target Kantin**, **Evaluasi**, **Catatan Lain**.
+- Keluhan punya status Baru / Dibahas / Selesai; target punya status Direncanakan / Berjalan / Tercapai (bisa diubah langsung dari kartu), plus tenggat dan nominal target opsional.
+- Target yang belum tercapai selalu tampil walau periodenya sudah lewat.
+- Di bagian atas ada rekap keuangan periode (penjualan, pengeluaran, laba, kategori pengeluaran terbesar) sebagai bahan evaluasi.
+- Semua pengguna bisa menulis dan mengedit; hanya Admin yang bisa menghapus.
+
+---
+
 ## 1. Isi folder
 
 - `index.html`, `app.html`, `app.js`, `home.js`, `style.css`, `supabase.js`, `netlify.toml`, `database.sql`, `assets/logo.png`

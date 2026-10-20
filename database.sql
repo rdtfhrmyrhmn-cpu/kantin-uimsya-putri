@@ -129,3 +129,4 @@ CREATE POLICY "kantin_users_authenticated_select" ON kantin_users
 -- 'pembayaran_hutang'   → Pembayaran hutang
 -- 'persediaan'          → Stok barang
 -- 'pemasok'             → Data supplier
+-- 'catatan'             → Evaluasi & Rekapitulasi (keluhan anggota, target, evaluasi; data: jenis, judul, isi, dari, status, tenggat, nominal)

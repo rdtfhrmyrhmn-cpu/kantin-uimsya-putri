@@ -13,6 +13,7 @@
       <button data-tab="home">🏠 <span>Beranda</span></button>
       <button data-tab="ringkasan">📊 <span>Ringkasan</span></button>
       <button data-tab="transaksi">💳 <span>Transaksi</span></button>
+      <button data-tab="pengeluaran">💸 <span>Pengeluaran</span></button>
       <button data-tab="kas">📒 <span>Buku Kas</span></button>
       <button data-tab="harian">🧾 <span>Laporan Harian</span></button>
       <button data-tab="piutang">📝 <span>Piutang</span></button>
@@ -20,6 +21,7 @@
       <button data-tab="persediaan">📦 <span>Persediaan</span></button>
       <button data-tab="pemasok">🤝 <span>Pemasok</span></button>
       <button data-tab="tabungan">🏦 <span>Tabungan</span></button>
+      <button data-tab="catatan">🗒️ <span>Evaluasi &amp; Rekapitulasi</span></button>
       <button data-tab="laporan">📑 <span>Laporan</span></button>
       <button data-tab="pengguna" id="navPengguna" style="display:none">👥 <span>Pengguna</span></button>
       <button data-tab="pengaturan">⚙️ <span>Pengaturan</span></button>
@@ -36,19 +38,28 @@
     <!-- Beranda -->
     <section class="page active" id="tab-home">
       <div class="hero"><div><div class="eyebrow">KANTIN UIMSYA PUTRI</div><h1 id="homeGreeting">Selamat datang 👋</h1><p>Kelola kas, transaksi, tabungan, piutang, hutang dan operasional dalam satu tempat.</p><div class="clock" id="homeClock">00:00:00</div><div class="date" id="homeDate">—</div></div><div class="hero-logo"><img src="assets/logo.png" alt="Logo"><span>✦</span></div></div>
+      <div class="card period-card">
+        <div class="pc-title"><b>📅 Periode</b><small id="periodHint">—</small></div>
+        <div class="pc-ctrl">
+          <button class="btn" id="periodPrev" title="Periode sebelumnya">◀</button>
+          <select id="homePeriod" aria-label="Pilih periode"></select>
+          <button class="btn" id="periodNext" title="Periode berikutnya">▶</button>
+          <button class="btn" id="periodNow">Bulan ini</button>
+        </div>
+      </div>
       <div class="stats" id="homeStats"></div>
-      <div class="grid-2"><div class="card"><div class="card-head"><h3>Ringkasan Bulan Ini</h3><button class="link-btn" data-tab="ringkasan">Lihat detail →</button></div><div id="homeMonth"></div></div><div class="card"><div class="card-head"><h3>Aksi Cepat</h3></div><div class="quick-grid"><button class="quick" data-open="cash-in">➕<span>Pemasukan</span></button><button class="quick" data-open="cash-out">➖<span>Pengeluaran</span></button><button class="quick" data-tab="harian">🧾<span>Laporan Harian</span></button><button class="quick" data-open="withdraw">🏦<span>Tarik Tabungan</span></button></div></div></div>
+      <div class="grid-2"><div class="card"><div class="card-head"><h3 id="homeMonthTitle">Ringkasan Bulan Ini</h3><button class="link-btn" data-tab="ringkasan">Lihat detail →</button></div><div id="homeMonth"></div></div><div class="card"><div class="card-head"><h3>Aksi Cepat</h3></div><div class="quick-grid"><button class="quick" data-open="cash-in">➕<span>Pemasukan</span></button><button class="quick" data-open="cash-out">➖<span>Pengeluaran</span></button><button class="quick" data-tab="harian">🧾<span>Laporan Harian</span></button><button class="quick" data-open="withdraw">🏦<span>Tarik Tabungan</span></button></div></div></div>
     </section>
 
     <!-- Ringkasan -->
     <section class="page" id="tab-ringkasan"><div class="section-head"><div><div class="eyebrow">DASHBOARD</div><h2>Ringkasan Keuangan</h2></div><div class="periods" id="dashPeriods"><button data-months="1" class="active">1B</button><button data-months="3">3B</button><button data-months="6">6B</button><button data-months="12">1T</button><button data-months="24">2T</button></div></div><div class="stats" id="dashStats"></div><div class="grid-2"><div class="card"><div class="card-head"><h3>Arus Keuangan per Bulan</h3></div><div class="chart" id="monthlyChart"></div></div><div class="card"><div class="card-head"><h3>Komposisi Bulan Ini</h3></div><div id="composition"></div></div></div><div class="card"><div class="card-head"><h3>Rekap Bulanan</h3><button class="btn" id="exportDash">CSV</button></div><div class="table-wrap"><table id="monthlyTable"><thead><tr><th>Bulan</th><th>Penjualan</th><th>Pendapatan Lain</th><th>Pengeluaran</th><th>Penarikan</th><th>Laba Operasional</th><th>Saldo Tabungan</th></tr></thead><tbody></tbody></table></div></div></section>
 
     <!-- Transaksi -->
-    <section class="page" id="tab-transaksi"><div class="section-head"><div><div class="eyebrow">TRANSAKSI</div><h2>Kas & Transaksi</h2></div><button class="primary" id="openTransaction">+ Transaksi</button></div><div class="card filter-card"><div class="filters"><input id="trxSearch" placeholder="Cari keterangan/kategori..."><select id="trxType"><option value="">Semua jenis</option><option value="pemasukan">Pemasukan</option><option value="pengeluaran">Pengeluaran</option><option value="transfer">Transfer</option><option value="setoran_tabungan">Setoran Tabungan</option><option value="penarikan">Penarikan</option></select><input type="date" id="trxFrom"><input type="date" id="trxTo"><button class="btn" id="resetTrx">Reset</button></div></div><div class="card"><div class="table-wrap"><table id="trxTable"><thead><tr><th>Tanggal</th><th>No. Transaksi</th><th>Jenis</th><th>Kategori</th><th>Akun</th><th>Nominal</th><th>Keterangan</th><th></th></tr></thead><tbody></tbody></table></div></div></section>
+    <section class="page" id="tab-transaksi"><div class="section-head"><div><div class="eyebrow">TRANSAKSI</div><h2>Kas & Transaksi</h2><button type="button" class="period-chip" title="Ubah periode di Beranda">📅 <span class="pc-label"></span> · ubah</button></div><button class="primary" id="openTransaction">+ Transaksi</button></div><div class="card filter-card"><div class="filters"><input id="trxSearch" placeholder="Cari keterangan/kategori..."><select id="trxType"><option value="">Semua jenis</option><option value="pemasukan">Pemasukan</option><option value="pengeluaran">Pengeluaran</option><option value="transfer">Transfer</option><option value="setoran_tabungan">Setoran Tabungan</option><option value="penarikan">Penarikan</option></select><input type="date" id="trxFrom"><input type="date" id="trxTo"><button class="btn" id="resetTrx">Reset</button></div></div><div class="card"><div class="table-wrap"><table id="trxTable"><thead><tr><th>Tanggal</th><th>No. Transaksi</th><th>Jenis</th><th>Kategori</th><th>Akun</th><th>Nominal</th><th>Keterangan</th><th></th></tr></thead><tbody></tbody></table></div></div></section>
 
     <!-- Buku Kas -->
     <section class="page" id="tab-kas">
-      <div class="section-head"><div><div class="eyebrow">BUKU KAS</div><h2>Arus Kas</h2></div>
+      <div class="section-head"><div><div class="eyebrow">BUKU KAS</div><h2>Arus Kas</h2><button type="button" class="period-chip" title="Ubah periode di Beranda">📅 <span class="pc-label"></span> · ubah</button></div>
         <div class="inline-input" id="openingBalanceWrap"><label>Saldo Awal <input type="number" id="openingBalance" min="0" step="1000"></label><button class="primary" id="saveOpening">Simpan</button></div>
       </div>
       <div class="stats" id="cashStats"></div>
@@ -56,7 +67,7 @@
     </section>
 
     <!-- Laporan Harian -->
-    <section class="page" id="tab-harian"><div class="section-head"><div><div class="eyebrow">MODUL KHUSUS KANTIN</div><h2>Laporan Harian</h2><p class="muted">Setiap tanggal muncul di laporan: <b>OPERASIONAL</b> jika ada transaksi, <b>LIBUR</b> jika kantin tidak beroperasi.</p></div><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="btn" id="setHolidayBtn">📅 Tandai Libur</button><button class="primary" id="saveDaily">💾 Simpan Laporan</button></div></div><div class="card"><div class="form-grid cols-3"><label>Tanggal<input type="date" id="dailyDate"></label><label>Pendapatan I<input type="number" id="pend1" min="0"></label><label>Pendapatan II<input type="number" id="pend2" min="0"></label><label>Titipan I<input type="number" id="titip1" min="0"></label><label>Titipan II<input type="number" id="titip2" min="0"></label><label>Titipan III<input type="number" id="titip3" min="0"></label><label>Tabungan<input type="number" id="dailySaving" min="0"></label><div class="calc-box"><span>Total Harian</span><strong id="dailyTotal">Rp0</strong></div></div><div class="notice" id="fridayNotice">—</div><div style="margin-top:10px;min-height:36px"><button class="btn" id="unsetHolidayBtn" style="display:none;background:rgba(34,197,94,.15);border-color:rgba(34,197,94,.3);color:#bbf7d0">✅ Ubah ke Operasional</button></div></div><div class="card"><div class="card-head"><h3>Riwayat Laporan Harian</h3><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><select id="dailyPeriodFilter" style="min-width:170px;padding:7px 10px;background:rgba(255,255,255,.08);border:1px solid var(--border);border-radius:10px;color:#fff;font-size:12px"><option value="">📅 Semua Periode</option></select><button class="btn" id="exportDaily">CSV</button></div></div><div class="table-wrap"><table id="dailyTable"><thead><tr><th>Tanggal</th><th>Hari</th><th>Status</th><th>Pemasukan</th><th>Pengeluaran</th><th>Tabungan</th><th>Total</th><th></th></tr></thead><tbody></tbody></table></div></div></section>
+    <section class="page" id="tab-harian"><div class="section-head"><div><div class="eyebrow">MODUL KHUSUS KANTIN</div><h2>Laporan Harian</h2><button type="button" class="period-chip" title="Ubah periode di Beranda">📅 <span class="pc-label"></span> · ubah</button><p class="muted">Setiap tanggal muncul di laporan: <b>OPERASIONAL</b> jika ada transaksi, <b>LIBUR</b> jika kantin tidak beroperasi.</p></div><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="btn" id="setHolidayBtn">📅 Tandai Libur</button><button class="primary" id="saveDaily">💾 Simpan Laporan</button></div></div><div class="card"><div class="form-grid cols-3"><label>Tanggal<input type="date" id="dailyDate"></label><label>Pendapatan I<input type="number" id="pend1" min="0"></label><label>Pendapatan II<input type="number" id="pend2" min="0"></label><label>Titipan I<input type="number" id="titip1" min="0"></label><label>Titipan II<input type="number" id="titip2" min="0"></label><label>Titipan III<input type="number" id="titip3" min="0"></label><label>Tabungan<input type="number" id="dailySaving" min="0"></label><div class="calc-box"><span>Total Harian</span><strong id="dailyTotal">Rp0</strong></div></div><div class="notice" id="fridayNotice">—</div><div style="margin-top:10px;min-height:36px"><button class="btn" id="unsetHolidayBtn" style="display:none;background:rgba(34,197,94,.15);border-color:rgba(34,197,94,.3);color:#bbf7d0">✅ Ubah ke Operasional</button></div></div><div class="card"><div class="card-head"><h3>Riwayat Laporan Harian</h3><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><select id="dailyPeriodFilter" style="min-width:170px;padding:7px 10px;background:rgba(255,255,255,.08);border:1px solid var(--border);border-radius:10px;color:#fff;font-size:12px"><option value="">📅 Semua Periode</option></select><button class="btn" id="exportDaily">CSV</button></div></div><div class="table-wrap"><table id="dailyTable"><thead><tr><th>Tanggal</th><th>Hari</th><th>Status</th><th>Pemasukan</th><th>Pengeluaran</th><th>Tabungan</th><th>Total</th><th></th></tr></thead><tbody></tbody></table></div></div></section>
 
     <!-- Piutang -->
     <section class="page" id="tab-piutang"><div class="section-head"><div><div class="eyebrow">TAGIHAN</div><h2>Piutang</h2></div><button class="primary" id="addPiutang">+ Piutang</button></div><div class="stats" id="piutangStats"></div><div class="card"><div class="table-wrap"><table id="piutangTable"><thead><tr><th>Tanggal</th><th>Pelanggan</th><th>Keterangan</th><th>Jatuh Tempo</th><th>Nominal</th><th>Terbayar</th><th>Sisa</th><th>Status</th><th></th></tr></thead><tbody></tbody></table></div></div></section>
@@ -72,6 +83,47 @@
 
     <!-- Tabungan -->
     <section class="page" id="tab-tabungan"><div class="section-head"><div><div class="eyebrow">SIMPANAN</div><h2>Tabungan</h2></div><button class="primary" id="addWithdraw">+ Penarikan</button></div><div class="stats" id="savingStats"></div><div class="card"><div class="table-wrap"><table id="savingTable"><thead><tr><th>Tanggal</th><th>Jenis</th><th>Keterangan</th><th>Nominal</th><th></th></tr></thead><tbody></tbody></table></div></div></section>
+
+    <!-- Pengeluaran -->
+    <section class="page" id="tab-pengeluaran">
+      <div class="section-head">
+        <div><div class="eyebrow">BIAYA</div><h2>Pengeluaran</h2><p class="muted">Rincian biaya dan rekap per kategori pada periode terpilih.</p></div>
+        <div class="toolbar">
+          <button class="primary" id="addExpense">+ Pengeluaran</button>
+          <button class="btn" id="printExpense">🖨️ Cetak</button>
+          <button class="btn" id="pdfExpense">📄 PDF</button>
+          <button class="btn" id="csvExpense">CSV</button>
+        </div>
+      </div>
+      <div class="exp-screen">
+        <div class="card filter-card"><div class="period-filter-bar" style="margin:0"><span>Periode:</span><select id="expPeriod"></select><span class="period-info" id="expInfo"></span></div></div>
+        <div class="stats" id="expStats"></div>
+        <div class="card"><div class="card-head"><h3>Rekap per Kategori</h3></div>
+          <div class="table-wrap"><table id="expCatTable"><thead><tr><th>Kategori</th><th>Transaksi</th><th>Total</th><th>%</th><th style="width:28%">Proporsi</th></tr></thead><tbody></tbody></table></div>
+        </div>
+        <div class="card" style="margin-top:16px"><div class="card-head"><h3>Rincian Pengeluaran</h3></div>
+          <div class="table-wrap"><table id="expTable"><thead><tr><th>Tanggal</th><th>No. Transaksi</th><th>Kategori</th><th>Akun</th><th>Keterangan</th><th>Nominal</th><th></th></tr></thead><tbody></tbody></table></div>
+        </div>
+      </div>
+      <div id="expensePrintSheet"></div>
+    </section>
+
+    <!-- Evaluasi dan Rekapitulasi (buku catatan) -->
+    <section class="page" id="tab-catatan">
+      <div class="section-head">
+        <div><div class="eyebrow">BUKU CATATAN</div><h2>Evaluasi dan Rekapitulasi</h2><button type="button" class="period-chip" title="Ubah periode di Beranda">📅 <span class="pc-label"></span> · ubah</button><p class="muted">Catat keluh kesah anggota, evaluasi, dan target kantin ke depan.</p></div>
+        <button class="primary" id="addNote">+ Catatan Baru</button>
+      </div>
+      <div class="stats" id="noteStats"></div>
+      <div class="card filter-card"><div class="filters">
+        <div class="periods" id="noteTabs">
+          <button data-kind="" class="active">Semua</button><button data-kind="keluhan">😟 Keluhan</button><button data-kind="target">🎯 Target</button><button data-kind="evaluasi">📋 Evaluasi</button><button data-kind="lain">🗒️ Lain</button>
+        </div>
+        <input id="noteSearch" placeholder="🔍 Cari judul / isi / nama anggota...">
+      </div>
+      <p class="muted" style="margin:10px 0 0;font-size:12px">Target yang belum tercapai selalu tampil walau periodenya sudah lewat, supaya tidak terlupakan.</p></div>
+      <div class="notes-grid" id="noteGrid"></div>
+    </section>
 
     <!-- Laporan -->
     <section class="page" id="tab-laporan"><div class="section-head"><div><div class="eyebrow">LAPORAN</div><h2>Laporan Keuangan</h2></div><div class="toolbar"><button class="btn" id="exportPdf">📄 Ekspor PDF</button><button class="btn" id="printReport">🖨️ Cetak</button></div></div><div class="report-grid"><button class="report-card" data-report="cash">📒<b>Buku Kas</b><span>Arus masuk, keluar & saldo</span></button><button class="report-card" data-report="profit">📈<b>Laba Rugi</b><span>Penjualan, beban & laba operasional</span></button><button class="report-card" data-report="receivable">📝<b>Piutang</b><span>Daftar tagihan & sisa</span></button><button class="report-card" data-report="payable">📌<b>Hutang</b><span>Kewajiban & sisa</span></button><button class="report-card" data-report="saving">🏦<b>Tabungan</b><span>Setoran & penarikan</span></button><button class="report-card" data-report="daily">🧾<b>Harian Kantin</b><span>Format operasional kantin</span></button><button class="report-card" data-report="expense">💸<b>Pengeluaran</b><span>Rincian biaya & rekap kategori</span></button><button class="report-card" data-report="supplier">🤝<b>Pemasok</b><span>Daftar pemasok & sisa hutang</span></button></div><div class="card" id="reportPreview"><div class="empty">Pilih jenis laporan untuk melihat preview.</div></div></section>
