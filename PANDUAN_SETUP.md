@@ -31,6 +31,11 @@ Semua fitur di bawah memakai tabel `kantin_data` yang sudah ada, jadi **tidak pe
 - Di bagian atas ada rekap keuangan periode (penjualan, pengeluaran, laba, kategori pengeluaran terbesar) sebagai bahan evaluasi.
 - Semua pengguna bisa menulis dan mengedit; hanya Admin yang bisa menghapus.
 
+### 4. Laporan (v3.1)
+- **Buku Kas** kini dikelompokkan per bulan: ada baris *Saldo awal bulan*, kolom **Saldo** di setiap transaksi, subtotal per bulan, dan total. Berlaku juga untuk Cetak dan PDF. Filter periodenya ikut periode Beranda, tapi bisa diubah di laporan.
+- **Cetak Semua Laporan**: satu perintah mencetak Buku Kas, Laba Rugi, Piutang, Hutang, Tabungan, Harian, Pengeluaran, dan Pemasok (tiap laporan di halaman baru). Tiap kartu laporan juga punya tombol **Cetak** sendiri.
+- **Penjualan Harian = Pemasukan - Titipan (Pengeluaran) - Tabungan**. Rumus ini dipakai di Laporan Harian, laporan harian cetak/PDF, dan Buku Kas.
+
 ---
 
 ## 1. Isi folder

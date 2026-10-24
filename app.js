@@ -15,6 +15,7 @@
     period:(()=>{const v=localStorage.getItem('kantin_period');if(v===null){const n=new Date();return n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0');}return v==='all'?'':v;})(), // '' = semua periode, 'YYYY-MM' = satu bulan
     dailyOverride:true, // sinkronkan filter Laporan Harian dengan periode global
     noteKind:'',
+    reportPeriod:undefined, // undefined = ikut periode global; '' = semua; 'YYYY-MM'
     report:null,
     editId:null,
     opening:Number(localStorage.getItem('kantin_opening_balance')||0),
@@ -168,6 +169,7 @@
     state.period=p||'';
     localStorage.setItem('kantin_period',p||'all');
     state.dailyOverride=true;
+    state.reportPeriod=undefined;
     renderAll();
   }
   function stepPeriod(dir){
@@ -298,7 +300,7 @@
   function cashEntries(){
     const rows=[];
     state.rows.forEach(r=>{const d=data(r);
-      if(r.tipe==='harian')rows.push({tgl:r.tgl,label:'Laporan harian',note:'Net harian kantin',in:totalDaily(d),out:0,source:'harian'});
+      if(r.tipe==='harian')rows.push({tgl:r.tgl,label:'Laporan harian',note:'Penjualan harian (pemasukan - titipan - tabungan)',in:totalDaily(d),out:0,source:'harian'});
       else if(r.tipe==='pemasukan')rows.push({tgl:r.tgl,label:'Pemasukan',note:d.keterangan||d.kategori||'',in:num(d.nominal),out:0,source:'trx'});
       else if(r.tipe==='pengeluaran')rows.push({tgl:r.tgl,label:'Pengeluaran',note:d.keterangan||d.kategori||'',in:0,out:num(d.nominal),source:'trx'});
       else if(r.tipe==='penarikan')rows.push({tgl:r.tgl,label:'Penarikan tabungan',note:d.keterangan||'',in:num(d.nominal),out:0,source:'saving'});
@@ -778,6 +780,26 @@
     sync();
   }
 
+  /* ── Buku kas per bulan dengan saldo berjalan ───────────────────────────── */
+  const rperiod=()=>state.reportPeriod!==undefined?state.reportPeriod:state.period;
+  function periodSelectOptions(list,cur){
+    const all=[...new Set([...list,...(cur?[cur]:[])])].sort().reverse();
+    return'<option value="">Semua Periode</option>'+all.map(p=>`<option value="${p}"${p===cur?' selected':''}>${monthName(p)}</option>`).join('');
+  }
+  function cashLedger(per){
+    const all=cashEntries();
+    let opening=state.opening;
+    if(per)all.filter(x=>x.tgl.slice(0,7)<per).forEach(x=>{opening+=x.in-x.out;});
+    const shown=per?all.filter(x=>x.tgl.startsWith(per)):all;
+    let bal=opening,tin=0,tout=0;const months=[];
+    shown.forEach(x=>{
+      const k=x.tgl.slice(0,7);let M=months[months.length-1];
+      if(!M||M.key!==k){M={key:k,start:bal,rows:[],in:0,out:0,end:bal};months.push(M);}
+      bal+=x.in-x.out;tin+=x.in;tout+=x.out;M.in+=x.in;M.out+=x.out;M.end=bal;M.rows.push({...x,saldo:bal});
+    });
+    return{opening,months,totalIn:tin,totalOut:tout,closing:bal};
+  }
+
   /* ── Laporan ─────────────────────────────────────────────────────────────── */
   function reportData(kind){
     if(kind==='daily')return byType('harian').sort((a,b)=>b.tgl.localeCompare(a.tgl));
@@ -793,25 +815,34 @@
   function dateKey(v){if(!v)return 0;const s=String(v).trim();const t=Date.parse(s);if(!Number.isNaN(t))return t;const m=s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);if(m){let y=+m[3];if(y<100)y+=2000;return new Date(y,+m[2]-1,+m[1]).getTime()}return 0;}
   function sortChronological(rows,field='tgl'){return Array.isArray(rows)?[...rows].sort((a,b)=>dateKey(a?.[field])-dateKey(b?.[field])):rows;}
 
-  function renderReport(kind){
-    state.report=kind;
-    const el=$('#reportPreview'),rows=sortChronological(reportData(kind),'tgl');
+  function renderReport(kind,opts){
+    if(!opts?.target)state.report=kind;
+    const el=opts?.target||$('#reportPreview'),rows=sortChronological(reportData(kind),'tgl');
     const reportNames={cash:'Buku Kas',profit:'Laba Rugi 12 Bulan',receivable:'Laporan Piutang',payable:'Laporan Hutang',saving:'Laporan Tabungan',daily:'Laporan Harian Kantin',supplier:'Laporan Pemasok',expense:'Laporan Pengeluaran'};
     const reportName=reportNames[kind]||'Laporan Keuangan';
     const generated=new Date().toLocaleString('id-ID',{dateStyle:'long',timeStyle:'short'});
     let body='',summary='';
     if(kind==='cash'){
-      const masuk=rows.reduce((s,x)=>s+num(x.in),0),keluar=rows.reduce((s,x)=>s+num(x.out),0);
-      body=`<div class="table-wrap"><table><thead><tr><th>Tanggal</th><th>Sumber</th><th>Keterangan</th><th>Masuk</th><th>Keluar</th></tr></thead><tbody>${rows.map(x=>`<tr><td>${x.tgl}</td><td>${x.label}</td><td>${esc(x.note)}</td><td class="num">${fmt(x.in)}</td><td class="num">${fmt(x.out)}</td></tr>`).join('')}</tbody></table></div>`;
-      summary=`<div class="print-summary"><div><span>Saldo Awal</span><b>${fmt(state.opening)}</b></div><div><span>Total Masuk</span><b>${fmt(masuk)}</b></div><div><span>Total Keluar</span><b>${fmt(keluar)}</b></div><div><span>Saldo Akhir</span><b>${fmt(state.opening+masuk-keluar)}</b></div></div>`;
+      const per=rperiod(),L=cashLedger(per);
+      const filterBar=`<div class="period-filter-bar no-print"><span>Filter Periode:</span><select id="reportPeriodFilter">${periodSelectOptions([...new Set(cashEntries().map(x=>x.tgl.slice(0,7)))],per)}</select><span class="period-info">${L.months.length} bulan · ${L.months.reduce((a,M)=>a+M.rows.length,0)} transaksi</span></div>`;
+      let tb='';
+      L.months.forEach(M=>{
+        tb+=`<tr class="print-month-header"><td colspan="6">📅 ${monthName(M.key)}</td></tr>`;
+        tb+=`<tr class="row-sub"><td colspan="5"><i>Saldo awal bulan</i></td><td class="num"><i>${fmt(M.start)}</i></td></tr>`;
+        M.rows.forEach(x=>{tb+=`<tr><td>${x.tgl}</td><td>${x.label}</td><td>${esc(x.note)}</td><td class="num">${x.in?fmt(x.in):'-'}</td><td class="num">${x.out?fmt(x.out):'-'}</td><td class="num">${fmt(x.saldo)}</td></tr>`;});
+        tb+=`<tr class="print-month-subtotal"><td colspan="3"><b>Subtotal ${monthName(M.key)}</b> · ${M.rows.length} transaksi</td><td class="num"><b>${fmt(M.in)}</b></td><td class="num"><b>${fmt(M.out)}</b></td><td class="num"><b>${fmt(M.end)}</b></td></tr>`;
+      });
+      if(L.months.length)tb+=`<tr class="print-grand-total"><td colspan="3"><b>TOTAL${per?' '+monthName(per).toUpperCase():''}</b></td><td class="num"><b>${fmt(L.totalIn)}</b></td><td class="num"><b>${fmt(L.totalOut)}</b></td><td class="num"><b>${fmt(L.closing)}</b></td></tr>`;
+      body=filterBar+`<div class="table-wrap"><table><thead><tr><th>Tanggal</th><th>Sumber</th><th>Keterangan</th><th class="num">Masuk</th><th class="num">Keluar</th><th class="num">Saldo</th></tr></thead><tbody>${tb||'<tr><td colspan="6" class="empty">Belum ada arus kas.</td></tr>'}</tbody></table></div>`;
+      summary=`<div class="print-summary"><div><span>${per?'Saldo Awal Periode':'Saldo Awal'}</span><b>${fmt(L.opening)}</b></div><div><span>Total Masuk</span><b>${fmt(L.totalIn)}</b></div><div><span>Total Keluar</span><b>${fmt(L.totalOut)}</b></div><div><span>Saldo Akhir</span><b>${fmt(L.closing)}</b></div></div>`;
     }else if(kind==='profit'){
       const sales=rows.reduce((s,x)=>s+num(x.sales),0),other=rows.reduce((s,x)=>s+num(x.otherIn),0),expense=rows.reduce((s,x)=>s+num(x.expense),0),profit=sales+other-expense;
       body=`<div class="table-wrap"><table><thead><tr><th>Bulan</th><th>Penjualan</th><th>Pend. Lain</th><th>Beban</th><th>Laba</th></tr></thead><tbody>${rows.map(x=>`<tr><td>${monthName(x.key)}</td><td class="num">${fmt(x.sales)}</td><td class="num">${fmt(x.otherIn)}</td><td class="num">${fmt(x.expense)}</td><td class="num">${fmt(x.sales+x.otherIn-x.expense)}</td></tr>`).join('')}</tbody></table></div>`;
       summary=`<div class="print-summary"><div><span>Total Penjualan</span><b>${fmt(sales)}</b></div><div><span>Pendapatan Lain</span><b>${fmt(other)}</b></div><div><span>Total Beban</span><b>${fmt(expense)}</b></div><div><span>Laba Bersih</span><b>${fmt(profit)}</b></div></div>`;
     }else if(kind==='daily'){
-      const prevPeriod=$('#reportPeriodFilter')?.value||'';
+      const prevPeriod=rperiod();
       const periodTgl=[...byType('harian'),...byLibur()].map(r=>r.tgl.slice(0,7));
-      const periods=[...new Set(periodTgl)].sort().reverse();
+      const periods=[...new Set([...periodTgl,...(prevPeriod?[prevPeriod]:[])])].sort().reverse();
       const periodOptions='<option value="">Semua Periode</option>'+periods.map(p=>`<option value="${p}"${p===prevPeriod?' selected':''}>${monthName(p)}</option>`).join('');
       const allDates=generateFullDailyRange(prevPeriod);
       const opsAll=allDates.filter(x=>x.status==='OPERASIONAL'),liburAll=allDates.filter(x=>x.status==='LIBUR');
@@ -826,13 +857,13 @@
       });
       tbody+=`<tr class="print-grand-total"><td colspan="2"><b>TOTAL KESELURUHAN</b></td><td>${opsAll.length} ops · ${liburAll.length} libur</td><td class="num"><b>${fmt(totalPemasukan)}</b></td><td class="num"><b>${fmt(totalPengeluaran)}</b></td><td class="num"><b>${fmt(totalTabungan)}</b></td><td class="num"><b>${fmt(totalNet)}</b></td></tr>`;
       const filterBar=`<div class="period-filter-bar no-print"><span>Filter Periode:</span><select id="reportPeriodFilter">${periodOptions}</select><span class="period-info">${allDates.length} hari · ${mkList.length} bulan ditampilkan</span></div>`;
-      body=filterBar+`<div class="table-wrap"><table class="daily-full-table"><thead><tr><th>Tanggal</th><th>Hari</th><th>Status</th><th class="num">Pemasukan</th><th class="num">Pengeluaran</th><th class="num">Tabungan</th><th class="num">Total</th></tr></thead><tbody>${tbody||'<tr><td colspan="7" class="empty">Belum ada data.</td></tr>'}</tbody></table></div>`;
-      summary=`<div class="print-summary wide"><div><span>Hari Operasional</span><b>${opsAll.length}</b></div><div><span>Hari Libur</span><b>${liburAll.length}</b></div><div><span>Total Pemasukan</span><b>${fmt(totalPemasukan)}</b></div><div><span>Total Pengeluaran</span><b>${fmt(totalPengeluaran)}</b></div><div><span>Total Tabungan</span><b>${fmt(totalTabungan)}</b></div><div><span>Total Bersih</span><b>${fmt(totalNet)}</b></div></div>`;
+      body=filterBar+`<div class="table-wrap"><table class="daily-full-table"><thead><tr><th>Tanggal</th><th>Hari</th><th>Status</th><th class="num">Pemasukan</th><th class="num">Pengeluaran</th><th class="num">Tabungan</th><th class="num">Penjualan Harian</th></tr></thead><tbody>${tbody||'<tr><td colspan="7" class="empty">Belum ada data.</td></tr>'}</tbody></table></div>`;
+      summary=`<div class="print-summary wide"><div><span>Hari Operasional</span><b>${opsAll.length}</b></div><div><span>Hari Libur</span><b>${liburAll.length}</b></div><div><span>Total Pemasukan</span><b>${fmt(totalPemasukan)}</b></div><div><span>Total Pengeluaran</span><b>${fmt(totalPengeluaran)}</b></div><div><span>Total Tabungan</span><b>${fmt(totalTabungan)}</b></div><div><span>Total Penjualan Harian</span><b>${fmt(totalNet)}</b></div></div>`;
         }else if(kind==='expense'){
-      const per=$('#reportPeriodFilter')?.value||'';
+      const per=rperiod();
       const list=expenseList(per),cats=expenseByCategory(list);
       const total=list.reduce((a,r)=>a+num(data(r).nominal),0);
-      const opts='<option value="">Semua Periode</option>'+expensePeriods().map(p=>`<option value="${p}"${p===per?' selected':''}>${monthName(p)}</option>`).join('');
+      const opts='<option value="">Semua Periode</option>'+[...new Set([...expensePeriods(),...(per?[per]:[])])].sort().reverse().map(p=>`<option value="${p}"${p===per?' selected':''}>${monthName(p)}</option>`).join('');
       let tb='';
       [...new Set(list.map(r=>r.tgl.slice(0,7)))].forEach(mk=>{
         const mr=list.filter(r=>r.tgl.startsWith(mk));
@@ -862,7 +893,23 @@
       <div class="print-rule"></div>${summary}${body}
       <footer class="print-footer"><span>Dokumen laporan internal • Kantin Uimsya Putri</span><span>Dicetak dari Sistem Keuangan</span></footer>
     </div>`;
-    if(kind==='daily'||kind==='expense'){const rfEl=el.querySelector('#reportPeriodFilter');if(rfEl)rfEl.onchange=()=>renderReport(kind);}
+    if(!opts?.target&&(kind==='daily'||kind==='expense'||kind==='cash')){const rfEl=el.querySelector('#reportPeriodFilter');if(rfEl)rfEl.onchange=()=>{state.reportPeriod=rfEl.value;renderReport(kind);};}
+  }
+
+  /* ── Cetak semua laporan (Buku Kas s.d. Pemasok) ────────────────────────── */
+  const REPORT_ORDER=['cash','profit','receivable','payable','saving','daily','expense','supplier'];
+  function printAllReports(){
+    const host=$('#printAllSheet');host.innerHTML='';
+    REPORT_ORDER.forEach(k=>{
+      const box=document.createElement('div');box.className='print-batch';
+      renderReport(k,{target:box});
+      box.querySelectorAll('.no-print').forEach(e=>e.remove());
+      host.appendChild(box);
+    });
+    document.body.dataset.printTarget='all';
+    const done=()=>{delete document.body.dataset.printTarget;host.innerHTML='';window.removeEventListener('afterprint',done)};
+    window.addEventListener('afterprint',done);
+    window.print();
   }
 
   /* ── Ekspor PDF (file .pdf langsung, via jsPDF + AutoTable) ──────────────── */
@@ -872,24 +919,33 @@
     const names={cash:'Buku Kas',profit:'Laba Rugi 12 Bulan',receivable:'Laporan Piutang',payable:'Laporan Hutang',saving:'Laporan Tabungan',daily:'Laporan Harian Kantin',supplier:'Laporan Pemasok',expense:'Laporan Pengeluaran'};
     const m={title:names[kind]||'Laporan Keuangan',suffix:'',summary:[],head:[[]],body:[],num:[]};
     if(kind==='cash'){
-      const masuk=rows.reduce((s,x)=>s+num(x.in),0),keluar=rows.reduce((s,x)=>s+num(x.out),0);
-      m.summary=[['Saldo Awal',rp(state.opening)],['Total Masuk',rp(masuk)],['Total Keluar',rp(keluar)],['Saldo Akhir',rp(state.opening+masuk-keluar)]];
-      m.head=[['Tanggal','Sumber','Keterangan','Masuk','Keluar']];m.num=[3,4];
-      m.body=rows.map(x=>[x.tgl,x.label,x.note||'',rp(x.in),rp(x.out)]);
+      const per=rperiod(),L=cashLedger(per);
+      m.suffix=per?'-'+per:'';if(per)m.title+=' — '+monthName(per);
+      m.summary=[[per?'Saldo Awal Periode':'Saldo Awal',rp(L.opening)],['Total Masuk',rp(L.totalIn)],['Total Keluar',rp(L.totalOut)],['Saldo Akhir',rp(L.closing)]];
+      m.head=[['Tanggal','Sumber','Keterangan','Masuk','Keluar','Saldo']];m.num=[3,4,5];
+      const hd={fillColor:[26,58,107],textColor:255,fontStyle:'bold'},sub={fillColor:[232,239,250],textColor:[26,58,107],fontStyle:'bold'},it={fillColor:[247,247,247],fontStyle:'italic'};
+      L.months.forEach(M=>{
+        m.body.push([{content:monthName(M.key),colSpan:6,styles:hd}]);
+        m.body.push([{content:'Saldo awal bulan',colSpan:5,styles:it},{content:rp(M.start),styles:{...it,halign:'right'}}]);
+        M.rows.forEach(x=>m.body.push([x.tgl,x.label,x.note||'',x.in?rp(x.in):'-',x.out?rp(x.out):'-',rp(x.saldo)]));
+        m.body.push([{content:`Subtotal ${monthName(M.key)} (${M.rows.length} transaksi)`,colSpan:3,styles:sub},{content:rp(M.in),styles:sub},{content:rp(M.out),styles:sub},{content:rp(M.end),styles:sub}]);
+      });
+      if(L.months.length){const g={fillColor:[13,31,60],textColor:255,fontStyle:'bold'};
+        m.body.push([{content:'TOTAL',colSpan:3,styles:g},{content:rp(L.totalIn),styles:g},{content:rp(L.totalOut),styles:g},{content:rp(L.closing),styles:g}]);}
     }else if(kind==='profit'){
       const sales=rows.reduce((s,x)=>s+num(x.sales),0),other=rows.reduce((s,x)=>s+num(x.otherIn),0),exp=rows.reduce((s,x)=>s+num(x.expense),0);
       m.summary=[['Total Penjualan',rp(sales)],['Pendapatan Lain',rp(other)],['Total Beban',rp(exp)],['Laba Bersih',rp(sales+other-exp)]];
       m.head=[['Bulan','Penjualan','Pend. Lain','Beban','Laba']];m.num=[1,2,3,4];
       m.body=rows.map(x=>[monthName(x.key),rp(x.sales),rp(x.otherIn),rp(x.expense),rp(x.sales+x.otherIn-x.expense)]);
     }else if(kind==='daily'){
-      const per=$('#reportPeriodFilter')?.value||'';
+      const per=rperiod();
       const all=generateFullDailyRange(per);
       const ops=all.filter(x=>x.status==='OPERASIONAL'),lib=all.filter(x=>x.status==='LIBUR');
       const tP=ops.reduce((s,x)=>s+num(x.pend1)+num(x.pend2),0),tT=ops.reduce((s,x)=>s+num(x.titip1)+num(x.titip2)+num(x.titip3),0),tS=ops.reduce((s,x)=>s+num(x.tabungan),0),tN=ops.reduce((s,x)=>s+totalDaily(x),0);
       m.suffix=per?'-'+per:'';
       if(per)m.title+=' — '+monthName(per);
-      m.summary=[['Hari Operasional',String(ops.length)],['Hari Libur',String(lib.length)],['Total Pemasukan',rp(tP)],['Total Pengeluaran',rp(tT)],['Total Tabungan',rp(tS)],['Total Bersih',rp(tN)]];
-      m.head=[['Tanggal','Hari','Status','Pemasukan','Pengeluaran','Tabungan','Total']];m.num=[3,4,5,6];
+      m.summary=[['Hari Operasional',String(ops.length)],['Hari Libur',String(lib.length)],['Total Pemasukan',rp(tP)],['Total Pengeluaran',rp(tT)],['Total Tabungan',rp(tS)],['Total Penjualan Harian',rp(tN)]];
+      m.head=[['Tanggal','Hari','Status','Pemasukan','Pengeluaran','Tabungan','Penjualan Harian']];m.num=[3,4,5,6];
       const mks=[...new Set(all.map(x=>x.tgl.slice(0,7)))].sort();
       mks.forEach(mk=>{
         let o=0,l=0,p=0,t=0,sv=0,n=0;
@@ -911,7 +967,7 @@
       m.head=[['Tanggal','Nama','Nominal','Terbayar','Sisa','Status']];m.num=[2,3,4];
       m.body=rows.map(x=>[x.tgl,x.d[nm]||'',rp(x.d.nominal),rp(x.paid),rp(x.balance),x.status]);
         }else if(kind==='expense'){
-      const per=opts&&opts.period!==undefined?opts.period:($('#reportPeriodFilter')?.value||'');
+      const per=opts&&opts.period!==undefined?opts.period:rperiod();
       const list=expenseList(per),cats=expenseByCategory(list);
       const total=list.reduce((a,r)=>a+num(data(r).nominal),0);
       m.suffix=per?'-'+per:'';
@@ -1241,7 +1297,9 @@
     }
 
     $('#changePassword').onclick=openPassword;
-    $('#printReport').onclick=()=>window.print();
+    $('#printReport').onclick=()=>{if(!state.report)return toast('Pilih jenis laporan terlebih dahulu.',true);delete document.body.dataset.printTarget;window.print();};
+    $('#printAllReports').onclick=printAllReports;
+    $$('.rc-print').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();e.preventDefault();delete document.body.dataset.printTarget;renderReport(b.dataset.print);window.print();}));
     $('#exportPdf').onclick=()=>{try{exportReportPDF();}catch(e){console.error(e);toast('Gagal membuat PDF: '+e.message,true);}};
     $('#supplierSearch')?.addEventListener('input',renderSuppliers);
 

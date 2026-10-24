@@ -174,3 +174,24 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}.app-shell{min-h
   body[data-print-target="expense"] #expensePrintSheet{display:block!important;width:100%;background:#fff}
   .period-card,.period-chip,.notes-grid{display:none!important}
 }
+
+/* ── v3.1: cetak semua laporan, buku kas per bulan ───────────────────────── */
+.report-card{position:relative}
+.rc-print{margin-top:auto;align-self:flex-start;padding:5px 11px;border:1px solid var(--border);border-radius:9px;background:rgba(255,255,255,.08);color:#fff!important;font-size:12px!important;font-weight:700;cursor:pointer}
+.rc-print:hover{background:rgba(255,255,255,.18)}
+#printAllSheet{display:none}
+@media screen{
+  .print-month-header td{background:rgba(26,58,107,.85);font-weight:800;color:#fff}
+  .print-month-subtotal td{background:rgba(179,205,224,.12);font-weight:700}
+  .print-grand-total td{background:rgba(1,31,75,.95);font-weight:800}
+  .row-sub td{background:rgba(255,255,255,.04);color:var(--muted)}
+  #reportPreview td.num,#reportPreview th.num{text-align:right}
+}
+@media print{
+  body[data-print-target="all"] #reportPreview{display:none!important}
+  body[data-print-target="all"] #printAllSheet{display:block!important;width:100%;background:#fff}
+  .print-batch{break-after:page;page-break-after:always}
+  .print-batch:last-child{break-after:auto;page-break-after:auto}
+  .row-sub td{font-style:italic;background:#f7f7f7!important}
+  .rc-print{display:none!important}
+}
