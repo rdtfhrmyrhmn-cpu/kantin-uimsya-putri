@@ -36,6 +36,11 @@ Semua fitur di bawah memakai tabel `kantin_data` yang sudah ada, jadi **tidak pe
 - **Cetak Semua Laporan**: satu perintah mencetak Buku Kas, Laba Rugi, Piutang, Hutang, Tabungan, Harian, Pengeluaran, dan Pemasok (tiap laporan di halaman baru). Tiap kartu laporan juga punya tombol **Cetak** sendiri.
 - **Penjualan Harian = Pemasukan - Titipan (Pengeluaran) - Tabungan**. Rumus ini dipakai di Laporan Harian, laporan harian cetak/PDF, dan Buku Kas.
 
+### 5. Cetak & Laporan Evaluasi dan Rekapitulasi (v3.2)
+- Tab **Evaluasi & Rekapitulasi** punya tombol **Cetak** dan **PDF** (mengikuti periode Beranda).
+- Menu **Laporan** punya kartu baru **Evaluasi & Rekap** (preview, Cetak, Ekspor PDF, filter periode) dan ikut dalam **Cetak Semua Laporan**.
+- Isi laporan: ringkasan keuangan periode, rekap pengeluaran per kategori, lalu catatan per jenis (Keluhan, Target, Evaluasi, Catatan Lain) beserta rekap status. Target yang belum tercapai selalu disertakan.
+
 ---
 
 ## 1. Isi folder

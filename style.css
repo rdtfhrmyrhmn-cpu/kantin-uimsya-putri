@@ -195,3 +195,13 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}.app-shell{min-h
   .row-sub td{font-style:italic;background:#f7f7f7!important}
   .rc-print{display:none!important}
 }
+
+/* ── v3.2: cetak & laporan Evaluasi dan Rekapitulasi ─────────────────────── */
+#notePrintSheet{display:none}
+@media print{
+  body[data-print-target="notes"] #tab-laporan{display:none!important}
+  body[data-print-target="notes"] #tab-catatan{display:block!important}
+  body[data-print-target="notes"] .note-screen{display:none!important}
+  body[data-print-target="notes"] #notePrintSheet{display:block!important;width:100%;background:#fff}
+  td[style*="pre-wrap"]{white-space:pre-wrap!important;word-break:break-word}
+}
