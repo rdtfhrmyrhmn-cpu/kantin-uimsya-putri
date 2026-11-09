@@ -41,6 +41,12 @@ Semua fitur di bawah memakai tabel `kantin_data` yang sudah ada, jadi **tidak pe
 - Menu **Laporan** punya kartu baru **Evaluasi & Rekap** (preview, Cetak, Ekspor PDF, filter periode) dan ikut dalam **Cetak Semua Laporan**.
 - Isi laporan: ringkasan keuangan periode, rekap pengeluaran per kategori, lalu catatan per jenis (Keluhan, Target, Evaluasi, Catatan Lain) beserta rekap status. Target yang belum tercapai selalu disertakan.
 
+### 6. Simpan PDF semua laporan (v3.3)
+- Di menu **Laporan**, tombol **📄 PDF Semua Laporan** menyimpan 9 laporan (Buku Kas, Laba Rugi, Piutang, Hutang, Tabungan, Harian, Pengeluaran, Pemasok, Evaluasi & Rekap) dalam **satu file PDF**. Tiap laporan mulai di halaman baru, dan footer memuat judul laporan serta nomor halaman.
+- Setiap kartu laporan juga punya tombol **📄 PDF** sendiri untuk menyimpan satu laporan langsung tanpa membuka preview.
+- Laporan yang punya filter periode (Buku Kas, Harian, Pengeluaran, Evaluasi) mengikuti periode yang sedang dipilih.
+- Pembuatan PDF membutuhkan koneksi internet saat halaman dimuat (library jsPDF dari CDN).
+
 ---
 
 ## 1. Isi folder

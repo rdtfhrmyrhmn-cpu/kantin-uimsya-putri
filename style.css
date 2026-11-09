@@ -205,3 +205,8 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}.app-shell{min-h
   body[data-print-target="notes"] #notePrintSheet{display:block!important;width:100%;background:#fff}
   td[style*="pre-wrap"]{white-space:pre-wrap!important;word-break:break-word}
 }
+
+/* ── v3.3: simpan PDF semua laporan ──────────────────────────────────────── */
+.rc-actions{margin-top:auto;display:flex;gap:6px;flex-wrap:wrap}
+.rc-actions .rc-print{margin-top:0}
+@media print{.rc-actions{display:none!important}}

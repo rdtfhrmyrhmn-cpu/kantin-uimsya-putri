@@ -1065,14 +1065,8 @@
     }
     return m;
   }
-  function exportReportPDF(kindArg,opts){
-    const kind=kindArg||state.report;
-    if(!kind)return toast('Pilih jenis laporan terlebih dahulu.',true);
-    const JsPDF=window.jspdf&&window.jspdf.jsPDF;
-    if(!JsPDF)return toast('Library PDF belum termuat. Periksa koneksi internet lalu muat ulang halaman.',true);
-    const m=reportPdfModel(kind,opts);
-    const doc=new JsPDF({orientation:'portrait',unit:'mm',format:'a4'});
-    if(typeof doc.autoTable!=='function')return toast('Plugin tabel PDF belum termuat. Muat ulang halaman.',true);
+  /* Menggambar satu laporan (header, ringkasan, tabel) ke dokumen PDF yang sedang dibuat. */
+  function drawReportPDF(doc,m){
     const W=doc.internal.pageSize.getWidth(),M=12;
     const generated=new Date().toLocaleString('id-ID',{dateStyle:'long',timeStyle:'short'});
     doc.setTextColor(17);doc.setFont('helvetica','bold');doc.setFontSize(8);doc.text('KANTIN UIMSYA PUTRI',M,13);
@@ -1114,15 +1108,46 @@
     };
     if(m.extra&&m.extraFirst){drawExtra(y);drawMain(doc.lastAutoTable.finalY+9);}
     else{drawMain(y);if(m.extra)drawExtra(doc.lastAutoTable.finalY+8);}
-    const pages=doc.getNumberOfPages();
+  }
+  function pdfFooters(doc,titleOf){
+    const W=doc.internal.pageSize.getWidth(),H=doc.internal.pageSize.getHeight(),M=12,pages=doc.getNumberOfPages();
     for(let i=1;i<=pages;i++){
       doc.setPage(i);doc.setFont('helvetica','normal');doc.setFontSize(7);doc.setTextColor(120);doc.setDrawColor(190);doc.setLineWidth(.2);
       doc.line(M,H-12,W-M,H-12);
-      doc.text('Dokumen laporan internal - Kantin Uimsya Putri',M,H-8);
+      doc.text(titleOf(i),M,H-8);
       doc.text(`Halaman ${i} / ${pages}`,W-M,H-8,{align:'right'});
     }
+  }
+  function newPdfDoc(){
+    const JsPDF=window.jspdf&&window.jspdf.jsPDF;
+    if(!JsPDF){toast('Library PDF belum termuat. Periksa koneksi internet lalu muat ulang halaman.',true);return null;}
+    const doc=new JsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+    if(typeof doc.autoTable!=='function'){toast('Plugin tabel PDF belum termuat. Muat ulang halaman.',true);return null;}
+    return doc;
+  }
+  function exportReportPDF(kindArg,opts){
+    const kind=kindArg||state.report;
+    if(!kind)return toast('Pilih jenis laporan terlebih dahulu.',true);
+    const doc=newPdfDoc();if(!doc)return;
+    const m=reportPdfModel(kind,opts);
+    drawReportPDF(doc,m);
+    pdfFooters(doc,()=>'Dokumen laporan internal - Kantin Uimsya Putri');
     doc.save(`laporan-${kind}${m.suffix}-${isoToday()}.pdf`);
     toast('PDF berhasil dibuat.');
+  }
+  /* Satu file PDF berisi semua laporan (Buku Kas s.d. Evaluasi), tiap laporan mulai di halaman baru. */
+  function exportAllReportsPDF(){
+    const doc=newPdfDoc();if(!doc)return;
+    const starts=[];
+    REPORT_ORDER.forEach((k,idx)=>{
+      const m=reportPdfModel(k);
+      if(idx>0)doc.addPage();
+      starts.push({page:doc.getNumberOfPages(),title:m.title});
+      drawReportPDF(doc,m);
+    });
+    pdfFooters(doc,pg=>{let t=starts[0].title;starts.forEach(x=>{if(pg>=x.page)t=x.title;});return t+' - Kantin Uimsya Putri';});
+    doc.save(`laporan-lengkap-${isoToday()}.pdf`);
+    toast('PDF semua laporan berhasil dibuat.');
   }
 
   /* ── Manajemen Pengguna (Admin only) ─────────────────────────────────────── */
@@ -1370,7 +1395,9 @@
     $('#changePassword').onclick=openPassword;
     $('#printReport').onclick=()=>{if(!state.report)return toast('Pilih jenis laporan terlebih dahulu.',true);delete document.body.dataset.printTarget;window.print();};
     $('#printAllReports').onclick=printAllReports;
-    $$('.rc-print').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();e.preventDefault();delete document.body.dataset.printTarget;renderReport(b.dataset.print);window.print();}));
+    $('#pdfAllReports').onclick=()=>{try{exportAllReportsPDF();}catch(e){console.error(e);toast('Gagal membuat PDF: '+e.message,true);}};
+    $$('.rc-pdf').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();e.preventDefault();try{exportReportPDF(b.dataset.pdf);}catch(err){console.error(err);toast('Gagal membuat PDF: '+err.message,true);}}));
+    $$('.rc-print[data-print]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();e.preventDefault();delete document.body.dataset.printTarget;renderReport(b.dataset.print);window.print();}));
     $('#exportPdf').onclick=()=>{try{exportReportPDF();}catch(e){console.error(e);toast('Gagal membuat PDF: '+e.message,true);}};
     $('#supplierSearch')?.addEventListener('input',renderSuppliers);
 
