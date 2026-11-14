@@ -108,8 +108,8 @@
     const su=$('#settingsUser');
     if(su) su.textContent=uname+(admin?' (Admin)':' (Kasir)');
     // Menu Pengguna (admin only)
-    const navP=$('#navPengguna');
-    if(navP) navP.style.display=admin?'':'none';
+    window.kantinUserName=uname.charAt(0).toUpperCase()+uname.slice(1);
+    if(window.updateHomeClock)window.updateHomeClock();
     // Saldo awal (admin only)
     const obw=$('#openingBalanceWrap');
     if(obw) obw.style.display=admin?'':'none';
@@ -192,13 +192,96 @@
     return t;
   }
 
+  /* ── Shell: dock bertingkat, tab atas, pencarian perintah, tema ───────────── */
+  const GROUPS=[
+    {id:'beranda',label:'Beranda',icon:'layout-grid',tabs:['home','ringkasan']},
+    {id:'keuangan',label:'Keuangan',icon:'wallet',tabs:['transaksi','pengeluaran','kas','tabungan']},
+    {id:'operasional',label:'Operasional',icon:'store',tabs:['harian','persediaan','pemasok']},
+    {id:'utang',label:'Piutang & Hutang',icon:'hand-coins',tabs:['piutang','hutang']},
+    {id:'evaluasi',label:'Evaluasi & Rekapitulasi',icon:'notebook-pen',tabs:['catatan']},
+    {id:'laporan',label:'Laporan',icon:'file-text',tabs:['laporan']},
+    {id:'sistem',label:'Pengaturan',icon:'shield-check',tabs:['pengaturan','pengguna']}
+  ];
+  const TAB_LABEL={home:'Beranda',ringkasan:'Ringkasan',transaksi:'Transaksi',pengeluaran:'Pengeluaran',kas:'Buku Kas',tabungan:'Tabungan',harian:'Laporan Harian',persediaan:'Persediaan',pemasok:'Pemasok',piutang:'Piutang',hutang:'Hutang',catatan:'Evaluasi & Rekapitulasi',laporan:'Laporan',pengaturan:'Pengaturan',pengguna:'Pengguna'};
+  const TAB_ICON={home:'layout-grid',ringkasan:'chart-pie',transaksi:'wallet',pengeluaran:'arrow-up-right',kas:'landmark',tabungan:'piggy-bank',harian:'receipt',persediaan:'package',pemasok:'truck',piutang:'hand-coins',hutang:'banknote',catatan:'notebook-pen',laporan:'file-text',pengaturan:'shield-check',pengguna:'users'};
+  const icon=n=>`<svg class="ic"><use href="#i-${n}"/></svg>`;
+  const groupOf=tab=>GROUPS.find(g=>g.tabs.includes(tab))||GROUPS[0];
+  const tabAllowed=t=>t!=='pengguna'||isAdmin();
+  const groupLast={};
+  function buildDock(){
+    const st=$('#dockStack');if(!st)return;
+    st.innerHTML=GROUPS.map(g=>`<button type="button" class="dock-item" data-group="${g.id}" data-label="${esc(g.label)}" aria-label="${esc(g.label)}">${icon(g.icon)}</button>`).join('');
+    $$('#dockStack .dock-item').forEach(b=>b.onclick=()=>{
+      const g=GROUPS.find(x=>x.id===b.dataset.group);
+      const t=groupLast[g.id]||g.tabs.find(tabAllowed);
+      nav(t);
+    });
+  }
+  function renderChrome(tab){
+    const g=groupOf(tab);groupLast[g.id]=tab;
+    $$('#dockStack .dock-item').forEach(b=>{b.classList.toggle('active',b.dataset.group===g.id);b.setAttribute('aria-current',b.dataset.group===g.id?'page':'false');});
+    const tt=$('#topTabs');
+    if(tt){
+      tt.innerHTML=g.tabs.filter(tabAllowed).map(t=>`<button type="button" class="tab-btn${t===tab?' active':''}" data-t="${t}">${t===tab?'<span class="tab-dot"></span>':''}<span>${esc(TAB_LABEL[t]||t)}</span></button>`).join('');
+      $$('#topTabs .tab-btn').forEach(b=>b.onclick=()=>nav(b.dataset.t));
+      const act=tt.querySelector('.active');if(act&&act.scrollIntoView)act.scrollIntoView({inline:'nearest',block:'nearest'});
+    }
+    document.title=(TAB_LABEL[tab]||'Beranda')+' — Kantin Uimsya Putri';
+  }
+  function applyTheme(t){
+    t=t==='light'?'light':'dark';
+    document.documentElement.dataset.theme=t;
+    try{localStorage.setItem('kantin_theme',t);}catch(e){}
+    const m=$('#metaTheme');if(m)m.content=t==='light'?'#e9edf7':'#08080a';
+  }
+  function initTheme(){
+    $('#themeLight')?.addEventListener('click',()=>applyTheme('light'));
+    $('#themeDark')?.addEventListener('click',()=>applyTheme('dark'));
+    applyTheme(document.documentElement.dataset.theme);
+  }
+  /* Pencarian perintah (Ctrl/⌘ + K): lompat ke halaman atau jalankan aksi cepat */
+  function initCommand(){
+    const inp=$('#cmdInput'),box=$('#cmdResults');if(!inp||!box)return;
+    let list=[],sel=0;
+    const all=()=>[
+      ...GROUPS.flatMap(g=>g.tabs.filter(tabAllowed).map(t=>({label:TAB_LABEL[t],sub:g.label,ic:TAB_ICON[t],run:()=>nav(t)}))),
+      {label:'Tambah pemasukan',sub:'Aksi',ic:'arrow-down-left',run:()=>openTransaction('pemasukan')},
+      {label:'Tambah pengeluaran',sub:'Aksi',ic:'arrow-up-right',run:()=>openTransaction('pengeluaran')},
+      {label:'Tarik tabungan',sub:'Aksi',ic:'piggy-bank',run:()=>withdrawModal()},
+      {label:'Catatan evaluasi baru',sub:'Aksi',ic:'notebook-pen',run:()=>{nav('catatan');noteModal(null,'keluhan');}}
+    ];
+    const norm=x=>String(x||'').toLowerCase();
+    const draw=()=>{
+      const q=norm(inp.value).trim();
+      /* peringkat: awalan label (0) → awalan kata (1) → mengandung (2) → cocok grup (3) */
+      const score=i=>{const l=norm(i.label);if(l.startsWith(q))return 0;if(l.split(/[\s&]+/).some(w=>w.startsWith(q)))return 1;if(l.includes(q))return 2;if(norm(i.sub).includes(q))return 3;return 9;};
+      list=all().map(i=>({i,sc:q?score(i):0})).filter(x=>x.sc<9).sort((a,b)=>a.sc-b.sc).map(x=>x.i).slice(0,9);
+      sel=Math.min(sel,Math.max(0,list.length-1));
+      box.innerHTML=list.length?list.map((i,n)=>`<button type="button" class="cmd-item${n===sel?' sel':''}" data-n="${n}" role="option">${icon(i.ic)}<span>${esc(i.label)}</span><small>${esc(i.sub)}</small></button>`).join(''):'<div class="cmd-empty">Tidak ada hasil.</div>';
+      box.classList.add('open');
+      $$('#cmdResults .cmd-item').forEach(b=>b.onmousedown=e=>{e.preventDefault();pick(+b.dataset.n);});
+    };
+    const close=()=>{box.classList.remove('open');};
+    const pick=n=>{const i=list[n];if(!i)return;inp.value='';close();inp.blur();i.run();};
+    inp.addEventListener('focus',draw);
+    inp.addEventListener('input',()=>{sel=0;draw();});
+    inp.addEventListener('blur',()=>setTimeout(close,120));
+    inp.addEventListener('keydown',e=>{
+      if(e.key==='ArrowDown'){e.preventDefault();sel=Math.min(sel+1,list.length-1);draw();}
+      else if(e.key==='ArrowUp'){e.preventDefault();sel=Math.max(sel-1,0);draw();}
+      else if(e.key==='Enter'){e.preventDefault();pick(sel);}
+      else if(e.key==='Escape'){inp.value='';close();inp.blur();}
+    });
+    document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();inp.focus();inp.select();}});
+  }
+
   /* ── Navigasi ────────────────────────────────────────────────────────────── */
   function nav(tab){
     state.tab=tab;
     $$('[data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
     $$('.page').forEach(p=>p.classList.toggle('active',p.id===`tab-${tab}`));
-    const titles={home:'Beranda',ringkasan:'Ringkasan',transaksi:'Transaksi',pengeluaran:'Pengeluaran',catatan:'Evaluasi dan Rekapitulasi',kas:'Buku Kas',harian:'Laporan Harian',piutang:'Piutang',hutang:'Hutang',persediaan:'Persediaan',pemasok:'Pemasok',tabungan:'Tabungan',laporan:'Laporan',pengguna:'Manajemen Pengguna',pengaturan:'Pengaturan'};
-    $('#pageTitle').textContent=$(`[data-tab="${tab}"] span`)?.textContent||titles[tab]||tab;
+    renderChrome(tab);
+    const sc=$('#pageScroll');if(sc)sc.scrollTop=0;
     if(tab==='home')renderHome();
     if(tab==='ringkasan')renderDashboard();
     if(tab==='transaksi')renderTransactions();
@@ -1381,7 +1464,9 @@
     $$('#noteTabs button').forEach(b=>b.onclick=()=>{state.noteKind=b.dataset.kind;renderNotes();});
     $('#noteSearch')?.addEventListener('input',renderNotes);
 
-    $('#refreshBtn').onclick=()=>refresh().then(()=>toast('Data diperbarui.')).catch(e=>toast(e.message,true));
+    $('#refreshBtn').onclick=()=>{const rb=$('#refreshBtn');rb.classList.add('spin');refresh().then(()=>toast('Data diperbarui.')).catch(e=>toast(e.message,true)).finally(()=>rb.classList.remove('spin'));};
+    $('#ctaAdd').onclick=()=>openTransaction();
+    initTheme();buildDock();renderChrome(state.tab);initCommand();
     $('#logoutBtn').onclick=async()=>{await db.auth.signOut();location.replace('index.html')};
 
     if(isAdmin()){
@@ -1409,7 +1494,6 @@
     $('#exportDash').onclick=()=>exportCSVRows(monthlySummary(state.months),'rekap-bulanan');
     $('#exportDaily').onclick=()=>exportCSVRows(byType('harian'),'laporan-harian');
     $$('.report-card').forEach(b=>b.onclick=()=>renderReport(b.dataset.report));
-    $('#mobileMenu').onclick=()=>$('.sidebar').classList.toggle('open');
     document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
 
     const dpfEl=$('#dailyPeriodFilter');

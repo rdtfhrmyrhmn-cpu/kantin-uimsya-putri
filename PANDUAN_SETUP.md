@@ -179,3 +179,32 @@ Gunakan **Publishable/anon key**, bukan service_role.
 
 **"Akun dibuat tapi gagal masuk kembali sebagai admin"**
 → Password konfirmasi admin salah. Akun baru tetap terbuat. Login manual ke Supabase Auth untuk verifikasi.
+
+---
+
+## Tampilan Baru v4 — Glassy Console (mengikuti dasbor Anda)
+
+Seluruh antarmuka dirombak memakai desain *Glassy Dashboard*: bingkai kaca, dock melengkung di kiri, tab di atas, latar gambar, dan tema **Gelap / Terang**. Logika, data, dan database **tidak berubah**, jadi tidak perlu menjalankan ulang `database.sql` dan tidak ada langkah build (tetap file statis untuk Netlify).
+
+**Navigasi dua tingkat**
+- **Dock kiri** (ikon) = kelompok menu. Di HP dock pindah ke bawah.
+- **Tab atas** = halaman di dalam kelompok:
+  - Beranda: Beranda, Ringkasan
+  - Keuangan: Transaksi, Pengeluaran, Buku Kas, Tabungan
+  - Operasional: Laporan Harian, Persediaan, Pemasok
+  - Piutang & Hutang: Piutang, Hutang
+  - Evaluasi & Rekapitulasi
+  - Laporan
+  - Pengaturan: Pengaturan, Pengguna (khusus Admin)
+- **Kolom pencarian** (tekan `Ctrl+K` / `⌘K`): ketik nama halaman atau perintah ("tambah pengeluaran", "tarik tabungan", dst.) lalu Enter.
+- Tombol **Terang / Gelap** di kanan atas; pilihan tersimpan di browser dan dipakai juga di halaman login.
+- Tombol **+ Transaksi** di kanan atas membuka form transaksi dari halaman mana pun.
+
+**Berkas yang berubah / ditambah**
+- `style.css` (ditulis ulang), `app.html` (shell baru), `index.html` (login bergaya sama), `app.js` (logika dock/tab/pencarian/tema), `home.js` (sapaan memakai nama pengguna).
+- `assets/bg.jpg` — gambar latar (diambil dari dasbor Anda, dikompres dari 1,6 MB menjadi ±130 KB). Ganti file ini untuk mengubah latar.
+- `assets/logo.png` — salinan dari `Logo.png`. Netlify membedakan huruf besar/kecil, jadi sebelumnya logo tidak tampil di situs online.
+
+**Catatan**
+- Font (Plus Jakarta Sans & Space Grotesk) dimuat dari Google Fonts; tanpa internet tampilan memakai font sistem.
+- Cetak dan PDF tetap berlatar putih seperti sebelumnya, tidak terpengaruh tema.

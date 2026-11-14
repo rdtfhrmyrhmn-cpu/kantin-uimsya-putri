@@ -1,27 +1,49 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="id" data-theme="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1.0">
-  <meta name="theme-color" content="#011f4b">
+  <meta name="theme-color" content="#08080a">
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <script>try{document.documentElement.dataset.theme=localStorage.getItem('kantin_theme')||'dark'}catch(e){}</script>
   <title>Login — Kantin Uimsya Putri</title>
   <style>
-    :root{--n1:#011f4b;--n2:#03396c;--b:#005b96;--s:#6497b1;--m:#b3cde0;--white:#f7fbff}
-    *{box-sizing:border-box}html,body{margin:0;min-height:100%;font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--white)}
-    body{min-height:100vh;display:grid;place-items:center;background:radial-gradient(circle at 15% 20%,rgba(179,205,224,.18),transparent 32%),radial-gradient(circle at 85% 80%,rgba(100,151,177,.16),transparent 34%),linear-gradient(135deg,var(--n1),var(--n2) 52%,var(--b))}
-    .page{width:min(92vw,430px)}.card{padding:34px 30px 28px;border:1px solid rgba(255,255,255,.24);border-radius:28px;background:linear-gradient(145deg,rgba(255,255,255,.16),rgba(255,255,255,.08));box-shadow:0 24px 60px rgba(0,0,0,.28);backdrop-filter:blur(20px)}
-    .logo-wrap{width:96px;height:96px;margin:0 auto 18px;display:grid;place-items:center;border-radius:24px;padding:9px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.22)}.logo{width:100%;height:100%;object-fit:contain;border-radius:18px}.fallback{display:none;font-size:42px}
-    h1{margin:0;text-align:center;font-size:30px}.sub{text-align:center;color:var(--m);margin:10px 0 25px;font-size:14px}.field{margin-bottom:15px}.field label{display:block;margin-bottom:7px;font-size:13px;font-weight:700;color:#dbeafe}
-    .wrap{position:relative}input{width:100%;border:1px solid rgba(255,255,255,.24);outline:0;border-radius:14px;padding:14px 15px;background:rgba(255,255,255,.1);color:#fff;font-size:15px}input:focus{border-color:var(--m);box-shadow:0 0 0 4px rgba(179,205,224,.12)}input::placeholder{color:rgba(255,255,255,.56)}.toggle{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:0;color:var(--m);cursor:pointer;padding:7px}
-    button.submit{width:100%;padding:14px;margin-top:5px;border:0;border-radius:14px;background:linear-gradient(135deg,var(--b),var(--n2));color:#fff;font-weight:800;cursor:pointer;font-size:15px;transition:.2s}.submit:hover{opacity:.9}.submit:disabled{opacity:.6;cursor:not-allowed}
-    .msg{display:none;margin-top:13px;padding:11px 12px;border-radius:12px;font-size:13px;background:rgba(127,29,29,.35);color:#fecaca}.msg.show{display:block}
-    .msg.warn{background:rgba(180,120,0,.3);color:#fde68a}
-    .foot{text-align:center;color:rgba(255,255,255,.5);font-size:12px;margin-top:18px}
+    :root{--text:#fff;--text2:rgba(255,255,255,.72);--muted:rgba(255,255,255,.46);--edge:rgba(255,255,255,.16);--input:rgba(14,14,20,.55);--card:linear-gradient(135deg,rgba(255,255,255,.10),rgba(22,22,30,.50) 50%,rgba(12,12,18,.66));--ov:radial-gradient(circle,rgba(0,0,0,.05),rgba(0,0,0,.6))}
+    :root[data-theme="light"]{--text:#0f172a;--text2:#475569;--muted:#8392a8;--edge:rgba(255,255,255,.8);--input:rgba(255,255,255,.88);--card:linear-gradient(135deg,rgba(255,255,255,.88),rgba(240,243,250,.74));--ov:radial-gradient(circle,rgba(0,0,0,0),rgba(0,0,0,.45))}
+    *{box-sizing:border-box}html,body{margin:0;min-height:100%}
+    body{min-height:100vh;min-height:100dvh;display:grid;place-items:center;padding:20px;font-family:'Plus Jakarta Sans',system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--text);
+      background:#08080a url('assets/bg.jpg') no-repeat center center fixed;background-size:cover;-webkit-font-smoothing:antialiased}
+    body::before{content:'';position:fixed;inset:0;background:var(--ov);pointer-events:none}
+    .orb{position:fixed;border-radius:50%;filter:blur(90px);pointer-events:none}.o1{width:460px;height:460px;top:-90px;left:6%;background:radial-gradient(circle,rgba(99,102,241,.32),transparent 70%)}.o2{width:420px;height:420px;bottom:-40px;right:8%;background:radial-gradient(circle,rgba(255,214,0,.22),transparent 70%)}
+    .page{position:relative;width:min(94vw,440px)}
+    .card{position:relative;padding:34px 30px 26px;border:1px solid var(--edge);border-radius:26px;background:var(--card);box-shadow:0 30px 70px rgba(0,0,0,.6),inset 0 1px 1px rgba(255,255,255,.35);backdrop-filter:blur(40px) saturate(200%);-webkit-backdrop-filter:blur(40px) saturate(200%);overflow:hidden}
+    .card::before{content:'';position:absolute;top:0;left:8%;right:8%;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.7) 25%,rgba(255,214,0,.5) 50%,rgba(255,255,255,.7) 75%,transparent)}
+    .cn{position:absolute;width:26px;height:26px;border:1.5px solid rgba(255,214,0,.4);box-shadow:0 0 12px rgba(255,214,0,.4)}.tl{top:0;left:0;border-right:0;border-bottom:0;border-top-left-radius:26px}.br{bottom:0;right:0;border-left:0;border-top:0;border-bottom-right-radius:26px}
+    .logo-wrap{width:92px;height:92px;margin:0 auto 16px;display:grid;place-items:center;border-radius:24px;padding:9px;background:rgba(255,255,255,.1);border:1px solid var(--edge)}.logo{width:100%;height:100%;object-fit:contain;border-radius:16px}.fallback{display:none;font-size:42px}
+    .eyebrow{text-align:center;font-size:10.5px;letter-spacing:.2em;font-weight:800;color:#ffd600}
+    h1{margin:6px 0 0;text-align:center;font:700 28px 'Space Grotesk','Plus Jakarta Sans',sans-serif;letter-spacing:-.5px}
+    .sub{text-align:center;color:var(--text2);margin:8px 0 24px;font-size:13.5px}
+    .field{margin-bottom:15px}.field label{display:block;margin-bottom:7px;font-size:12px;font-weight:700;color:var(--text2)}
+    .wrap{position:relative}
+    input{width:100%;border:1px solid var(--edge);outline:0;border-radius:13px;padding:13px 14px;background:var(--input);color:var(--text);font:inherit;font-size:14.5px;transition:all .2s}
+    input:focus{border-color:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,.25)}input::placeholder{color:var(--muted)}
+    .toggle{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:0;color:var(--text2);cursor:pointer;padding:7px}
+    button.submit{width:100%;padding:14px;margin-top:6px;border:1px solid rgba(255,255,255,.25);border-radius:13px;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;font:inherit;font-weight:800;cursor:pointer;font-size:14.5px;box-shadow:0 6px 20px rgba(79,70,229,.45),inset 0 1px 1px rgba(255,255,255,.3);transition:all .2s}
+    .submit:hover{transform:translateY(-1px);box-shadow:0 10px 26px rgba(79,70,229,.55)}.submit:disabled{opacity:.6;cursor:not-allowed;transform:none}
+    .msg{display:none;margin-top:13px;padding:11px 12px;border-radius:12px;font-size:13px;background:rgba(244,63,94,.18);color:#fda4af;border:1px solid rgba(244,63,94,.3)}.msg.show{display:block}
+    .msg.warn{background:rgba(245,158,11,.18);color:#fde68a;border-color:rgba(245,158,11,.3)}
+    :root[data-theme="light"] .msg{color:#be123c}:root[data-theme="light"] .msg.warn{color:#92400e}
+    .foot{text-align:center;color:var(--muted);font-size:12px;margin-top:18px;line-height:1.55}
+    .theme{position:absolute;top:14px;right:14px;width:32px;height:32px;border-radius:10px;border:1px solid var(--edge);background:rgba(255,255,255,.08);color:var(--text);cursor:pointer;font-size:14px}
   </style>
 </head>
 <body>
-  <main class="page"><section class="card">
+  <div class="orb o1"></div><div class="orb o2"></div>
+  <main class="page"><section class="card"><span class="cn tl"></span><span class="cn br"></span>
+    <button type="button" class="theme" id="themeBtn" title="Ganti tema">🌓</button>
     <div class="logo-wrap"><img class="logo" src="assets/logo.png" alt="Logo Kantin" onerror="this.style.display='none';document.querySelector('.fallback').style.display='block'"><span class="fallback">🏪</span></div>
+    <div class="eyebrow">SISTEM KEUANGAN</div>
     <h1>Kantin Uimsya Putri</h1><div class="sub">Sistem Keuangan & Operasional Kantin</div>
     <div class="msg" id="preMsg"></div>
     <form id="loginForm">
@@ -54,6 +76,7 @@
     const preErr=params.get('error');
     if(preErr&&errMap[preErr]){pre.textContent=errMap[preErr];pre.className='msg warn show';}
 
+    document.getElementById('themeBtn').onclick=()=>{const t=document.documentElement.dataset.theme==='light'?'dark':'light';document.documentElement.dataset.theme=t;try{localStorage.setItem('kantin_theme',t)}catch(e){}};
     document.getElementById('toggle').onclick=()=>{
       const v=p.type==='password';
       p.type=v?'text':'password';
