@@ -1,0 +1,9 @@
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Frame-Options: DENY
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+
+# Aset statis boleh di-cache lama; HTML/JS/CSS selalu dicek ulang agar update langsung terlihat
+/assets/*
+  Cache-Control: public, max-age=604800

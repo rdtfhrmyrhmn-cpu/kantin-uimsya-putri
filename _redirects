@@ -1,0 +1,2 @@
+# /login membuka halaman masuk. (/app dan /app.html otomatis dilayani Cloudflare tanpa aturan tambahan.)
+/login / 302
