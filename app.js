@@ -49,9 +49,36 @@
   const canDelete=()=>state.role==='admin';
 
   /* ── Auth & Role ─────────────────────────────────────────────────────────── */
+  /* Batas sesi: login hanya berlaku 1 jam sejak masuk, lalu keluar otomatis. */
+  const SESSION_MS=60*60*1000,LOGIN_KEY='kantin_login_at';
+  const loginAt=()=>+localStorage.getItem(LOGIN_KEY)||0;
+  const sessionLeft=()=>loginAt()?loginAt()+SESSION_MS-Date.now():-1;
+  async function forceLogout(reason){
+    if(forceLogout.busy)return;forceLogout.busy=true;
+    try{localStorage.removeItem(LOGIN_KEY);}catch(e){}
+    try{await db.auth.signOut();}catch(e){}
+    location.replace('index.html'+(reason?'?error='+reason:''));
+  }
+  function startSessionGuard(){
+    const chip=$('#sessChip'),warned={};
+    const fmtLeft=ms=>{const t=Math.max(0,Math.ceil(ms/1000)),m=Math.floor(t/60),s=t%60;return String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');};
+    const tick=()=>{
+      const left=sessionLeft();
+      if(left<=0){forceLogout(loginAt()?'session_timeout':'session_expired');return;}
+      if(chip){chip.textContent='⏱ '+fmtLeft(left);chip.classList.toggle('warn',left<=5*60*1000);}
+      if(left<=60*1000&&!warned.m1){warned.m1=true;toast('Sesi berakhir kurang dari 1 menit lagi. Selesaikan dan simpan pekerjaan Anda.',true);}
+      else if(left<=5*60*1000&&!warned.m5){warned.m5=true;toast('Sesi login berakhir dalam 5 menit. Simpan pekerjaan Anda.');}
+    };
+    tick();setInterval(tick,1000);
+    /* timer di tab latar bisa tertahan: cek ulang saat tab aktif lagi / berubah di tab lain */
+    document.addEventListener('visibilitychange',()=>{if(!document.hidden)tick();});
+    window.addEventListener('focus',tick);
+    window.addEventListener('storage',e=>{if(e.key===LOGIN_KEY)tick();});
+  }
   async function requireSession(){
     const {data,error}=await db.auth.getSession();
     if(error||!data?.session){location.replace('index.html?error=session_expired');return false;}
+    if(sessionLeft()<=0){await forceLogout(loginAt()?'session_timeout':'session_expired');return false;}
     state.session=data.session;
     return true;
   }
@@ -1467,7 +1494,7 @@
     $('#refreshBtn').onclick=()=>{const rb=$('#refreshBtn');rb.classList.add('spin');refresh().then(()=>toast('Data diperbarui.')).catch(e=>toast(e.message,true)).finally(()=>rb.classList.remove('spin'));};
     $('#ctaAdd').onclick=()=>openTransaction();
     initTheme();buildDock();renderChrome(state.tab);initCommand();
-    $('#logoutBtn').onclick=async()=>{await db.auth.signOut();location.replace('index.html')};
+    $('#logoutBtn').onclick=()=>forceLogout('');
 
     if(isAdmin()){
       $('#saveOpening').onclick=()=>{
@@ -1530,6 +1557,7 @@
     if(!(await loadUserRole()))return;
     applyRoleRestrictions();
     bind();
+    startSessionGuard();
     await refresh();
     loadDailyForm(isoToday());
     if(state.tab==='pengguna'&&isAdmin())renderUsers();

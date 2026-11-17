@@ -71,8 +71,10 @@
     const errMap={
       no_access:'⚠️ Akun Anda belum memiliki akses. Hubungi admin untuk mendapatkan akses.',
       deactivated:'🚫 Akun Anda telah dinonaktifkan. Hubungi admin.',
-      session_expired:'🔒 Sesi berakhir. Silakan login kembali.'
+      session_expired:'🔒 Sesi berakhir. Silakan login kembali.',
+      session_timeout:'⏱ Sesi login 1 jam telah berakhir. Silakan login kembali.'
     };
+    const SESSION_MS=60*60*1000,LOGIN_KEY='kantin_login_at';
     const preErr=params.get('error');
     if(preErr&&errMap[preErr]){pre.textContent=errMap[preErr];pre.className='msg warn show';}
 
@@ -85,8 +87,14 @@
 
     const show=t=>{m.textContent=t;m.className='msg show'};
 
-    supabaseClient.auth.getSession().then(({data})=>{
-      if(data.session) location.replace('app.html');
+    // Sesi hanya sah jika masih dalam 1 jam sejak login; selebihnya dikeluarkan otomatis
+    supabaseClient.auth.getSession().then(async({data})=>{
+      if(!data.session)return;
+      const at=+localStorage.getItem(LOGIN_KEY)||0;
+      if(at&&Date.now()-at<SESSION_MS){location.replace('app.html');return;}
+      try{localStorage.removeItem(LOGIN_KEY);}catch(e){}
+      await supabaseClient.auth.signOut().catch(()=>{});
+      if(at&&!preErr){pre.textContent=errMap.session_timeout;pre.className='msg warn show';}
     }).catch(()=>{});
 
     form.addEventListener('submit',async e=>{
@@ -100,6 +108,7 @@
       try{
         const {error}=await supabaseClient.auth.signInWithPassword({email,password});
         if(error)throw error;
+        try{localStorage.setItem(LOGIN_KEY,String(Date.now()));}catch(e){}
         location.replace('app.html');
       }catch(err){
         console.error(err);
