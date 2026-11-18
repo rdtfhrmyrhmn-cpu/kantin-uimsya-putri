@@ -398,6 +398,17 @@ td.num,th.num{text-align:right}
 }
 @media(max-width:420px){.stats{gap:8px}.stat{padding:11px 12px}.stat strong{font-size:16px}.quick-grid{grid-template-columns:1fr 1fr}}
 
+/* ───────────── BIODATA & FOOTER ───────────── */
+.bio{display:grid;grid-template-columns:72px 1fr;gap:6px 18px;align-items:start}
+.bio-logo{width:72px;height:72px;object-fit:contain;border-radius:16px;background:var(--badge-bg);border:1px solid var(--edge);padding:5px}
+.bio-main h4{margin:0 0 4px;font-size:19px}.bio-about{margin:0;color:var(--text2);font-size:13px;white-space:pre-wrap}
+.bio-grid{grid-column:1/-1;display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px 26px;margin:14px 0 0;padding-top:14px;border-top:1px dashed var(--line)}
+.bio-grid dt{font-size:10.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.bio-grid dd{margin:3px 0 0;font-size:13.5px;font-weight:600;overflow-wrap:anywhere;white-space:pre-wrap}
+.site-footer{display:flex;justify-content:space-between;gap:8px 24px;flex-wrap:wrap;margin:18px 0 4px;padding:12px 4px 4px;border-top:1px solid var(--line);color:var(--muted);font-size:11.5px;line-height:1.6}
+.site-footer a{color:var(--text2);text-decoration:underline;text-underline-offset:3px}.site-footer a:hover{color:var(--text)}.site-footer b{color:var(--text2)}
+@media(max-width:820px){.bio{grid-template-columns:56px 1fr}.bio-logo{width:56px;height:56px}.site-footer{flex-direction:column}}
+
 /* ───────────── CETAK (blok asli) ───────────── */
 @media print{
   @page{size:A4 portrait;margin:12mm 12mm 14mm}
@@ -497,7 +508,7 @@ td.num,th.num{text-align:right}
 @media print{
   :root,:root[data-theme="dark"],:root[data-theme="light"]{color-scheme:light!important}
   html,body{position:static!important;width:auto!important;height:auto!important;overflow:visible!important;background:#fff!important}
-  body::before,.gd-orbs,.corner,.dock,.topbar,.toast,#modalRoot,.console::before{display:none!important}
+  body::before,.gd-orbs,.corner,.dock,.topbar,.toast,#modalRoot,.console::before,.site-footer,#biodataCard{display:none!important}
   .app-shell,.console,.viewport,.page-scroll{position:static!important;display:block!important;width:auto!important;max-width:none!important;height:auto!important;max-height:none!important;
     overflow:visible!important;padding:0!important;margin:0!important;border:0!important;border-radius:0!important;box-shadow:none!important;background:none!important;
     backdrop-filter:none!important;-webkit-backdrop-filter:none!important}

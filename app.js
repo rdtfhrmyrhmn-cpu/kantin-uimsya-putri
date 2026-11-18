@@ -83,6 +83,12 @@
     return true;
   }
 
+  /* Simpan baris role; bila kolom email belum ada (SQL v4 belum dijalankan) ulangi tanpa email. */
+  async function insertRole(row){
+    let r=await db.from('kantin_user_roles').insert(row);
+    if(r.error&&/email/i.test(r.error.message||'')){const {email,...rest}=row;r=await db.from('kantin_user_roles').insert(rest);}
+    return r;
+  }
   async function loadUserRole(){
     const userId=state.session.user.id;
     const {data:allRoles,error}=await db.from('kantin_user_roles').select('*');
@@ -100,23 +106,29 @@
 
     if(!myRole){
       const hasAdmin=allRoles?.some(r=>r.role==='admin'&&r.is_active!==false);
+      let boot=false;
       if(!hasAdmin){
-        // Bootstrap: tidak ada admin sama sekali → user ini jadi admin pertama
-        const username=state.session.user.email?.replace('@kantin-uimsya.local','')||'admin';
-        const {error:insErr}=await db.from('kantin_user_roles').insert({
-          user_id:userId,username,role:'admin',is_active:true
-        });
-        if(insErr) console.error('Bootstrap admin insert error:',insErr);
-        state.role='admin';
-        state.userRoles=[{user_id:userId,username,role:'admin',is_active:true,created_at:new Date().toISOString()}];
+        // Bootstrap: belum ada admin sama sekali → akun ini jadi admin pertama.
+        // Hanya dianggap berhasil bila database menerima INSERT (RLS menolak orang luar).
+        const mail=(state.session.user.email||'').toLowerCase();
+        const username=mail.replace('@kantin-uimsya.local','').split('@')[0]||'admin';
+        const {error:insErr}=await insertRole({user_id:userId,username,role:'admin',is_active:true,email:mail.endsWith('@kantin-uimsya.local')?null:mail});
+        if(insErr){console.warn('Bootstrap admin ditolak:',insErr.message);}
+        else{
+          boot=true;state.role='admin';
+          state.userRoles=[{user_id:userId,username,role:'admin',is_active:true,email:mail,created_at:new Date().toISOString()}];
+        }
+      }
+      if(boot){
+        /* admin pertama sudah dibuat */
       }else{
         toast('Akun Anda belum memiliki akses. Hubungi admin.',true);
-        setTimeout(async()=>{await db.auth.signOut();location.replace('index.html?error=no_access');},2500);
+        setTimeout(()=>forceLogout('no_access'),2500);
         return false;
       }
     }else if(myRole.is_active===false){
       toast('Akun Anda telah dinonaktifkan. Hubungi admin.',true);
-      setTimeout(async()=>{await db.auth.signOut();location.replace('index.html?error=deactivated');},2500);
+      setTimeout(()=>forceLogout('deactivated'),2500);
       return false;
     }else{
       state.role=myRole.role;
@@ -128,7 +140,8 @@
   function applyRoleRestrictions(){
     const admin=isAdmin();
     // Label user + role tag
-    const uname=state.session.user.email?.split('@')[0]||'Pengguna';
+    const me=(state.userRoles||[]).find(r=>r.user_id===state.session.user.id);
+    const uname=me?.username||state.session.user.email?.split('@')[0]||'Pengguna';
     const el=$('#userLabel');
     if(el) el.innerHTML=`${esc(uname)} <span class="role-tag ${admin?'admin':'kasir'}">${admin?'👑 Admin':'👤 Kasir'}</span>`;
     // Profil di pengaturan
@@ -172,7 +185,7 @@
   const inPeriod=tgl=>!state.period||String(tgl||'').startsWith(state.period);
   const periodLabel=()=>state.period?monthName(state.period):'Semua periode';
   function periodOptions(){
-    const set=new Set(state.rows.map(r=>String(r.tgl||'').slice(0,7)).filter(k=>/^\d{4}-\d{2}$/.test(k)));
+    const set=new Set(state.rows.filter(r=>r.tipe!=='biodata').map(r=>String(r.tgl||'').slice(0,7)).filter(k=>/^\d{4}-\d{2}$/.test(k)));
     set.add(ymd(new Date()).slice(0,7));
     if(state.period)set.add(state.period);
     return[...set].sort().reverse();
@@ -217,6 +230,61 @@
     });
     t.profit=t.sales+t.otherIn-t.expense;
     return t;
+  }
+
+
+  /* ── Biodata kantin (Beranda) & footer situs ─────────────────────────────── */
+  const BIO_FIELDS=[['alamat','Alamat / Lokasi'],['pengelola','Pengelola'],['kontak','Kontak'],['jam','Jam Operasional'],['berdiri','Berdiri Sejak']];
+  const siteCfg=()=>window.KANTIN_SITE||{};
+  function biodata(){
+    const base=siteCfg().biodata||{};
+    const row=byType('biodata')[0];
+    return{...base,...(row?data(row):{})};
+  }
+  function renderBiodata(){
+    const el=$('#biodataBody');if(!el)return;
+    const B=biodata(),filled=BIO_FIELDS.some(([k])=>String(B[k]||'').trim())||String(B.tentang||'').trim();
+    const eb=$('#editBiodata');if(eb)eb.hidden=!isAdmin();
+    const val=v=>String(v||'').trim()?esc(v):'<span class="muted">Belum diisi</span>';
+    el.innerHTML=`<div class="bio">
+      <img class="bio-logo" src="assets/logo.png" alt="" onerror="this.style.display='none'">
+      <div class="bio-main"><h4>${esc(B.nama||siteCfg().nama||'Kantin')}</h4><p class="bio-about">${String(B.tentang||'').trim()?esc(B.tentang):'<span class="muted">Deskripsi kantin belum diisi.</span>'}</p></div>
+      <dl class="bio-grid">${BIO_FIELDS.map(([k,l])=>`<div><dt>${l}</dt><dd>${val(B[k])}</dd></div>`).join('')}</dl>
+    </div>${!filled&&isAdmin()?'<div class="notice" style="margin-top:14px">Biodata masih kosong. Klik <b>Edit</b> untuk mengisinya.</div>':''}`;
+  }
+  function biodataModal(){
+    if(!isAdmin())return toast('Hanya admin yang dapat mengubah biodata.',true);
+    const B=biodata();
+    formModal('Edit Biodata Kantin',`<div class="form-grid cols-2">
+      <label class="full">Nama kantin<input name="nama" value="${esc(B.nama||'')}" maxlength="80" required></label>
+      <label class="full">Alamat / Lokasi<textarea name="alamat" rows="2" maxlength="300">${esc(B.alamat||'')}</textarea></label>
+      <label>Pengelola<input name="pengelola" value="${esc(B.pengelola||'')}" maxlength="80"></label>
+      <label>Kontak (telepon / WA)<input name="kontak" value="${esc(B.kontak||'')}" maxlength="60"></label>
+      <label>Jam operasional<input name="jam" value="${esc(B.jam||'')}" maxlength="80" placeholder="Contoh: Senin–Jumat, 07.00–15.00"></label>
+      <label>Berdiri sejak<input name="berdiri" value="${esc(B.berdiri||'')}" maxlength="30" placeholder="Contoh: 2019"></label>
+      <label class="full">Tentang kantin<textarea name="tentang" rows="4" maxlength="800" placeholder="Deskripsi singkat, visi, atau misi kantin">${esc(B.tentang||'')}</textarea></label>
+    </div>`,
+    async f=>{
+      const payload={};
+      ['nama','alamat','pengelola','kontak','jam','berdiri','tentang'].forEach(k=>{payload[k]=String(f.get(k)||'').trim();});
+      if(!payload.nama)throw new Error('Nama kantin wajib diisi.');
+      await writeRow(isoToday(),'biodata',payload,'biodata:kantin');
+    });
+  }
+  const safeUrl=u=>/^https?:\/\//i.test(String(u||''))?String(u):'';
+  function renderFooter(){
+    const el=$('#siteFooter');if(!el)return;
+    const C=siteCfg(),P=C.programmer||{};
+    let dibuat='';
+    if(C.dibuat){const d=new Date(C.dibuat+'T00:00:00');if(!isNaN(d))dibuat=d.toLocaleDateString('id-ID',{day:'numeric',month:'long',year:'numeric'});}
+    const links=[];
+    if(String(P.whatsapp||'').trim()){let n=String(P.whatsapp).replace(/\D/g,'');if(n.startsWith('0'))n='62'+n.slice(1);links.push(`<a href="https://wa.me/${n}" target="_blank" rel="noopener">WhatsApp ${esc(P.whatsapp)}</a>`);}
+    if(String(P.email||'').trim())links.push(`<a href="mailto:${esc(P.email)}">${esc(P.email)}</a>`);
+    if(String(P.instagram||'').trim()){const h=String(P.instagram).replace(/^@/,'').replace(/[^\w.]/g,'');links.push(`<a href="https://instagram.com/${h}" target="_blank" rel="noopener">@${esc(h)}</a>`);}
+    if(safeUrl(P.website))links.push(`<a href="${esc(safeUrl(P.website))}" target="_blank" rel="noopener">${esc(String(P.website).replace(/^https?:\/\//i,''))}</a>`);
+    const who=String(P.nama||'').trim();
+    const contact=(who||links.length)?`Programmer: ${who?`<b>${esc(who)}</b>`:''}${who&&links.length?' · ':''}${links.join(' · ')}`:'Kontak programmer segera ditambahkan.';
+    el.innerHTML=`<div>© ${new Date().getFullYear()} ${esc(C.nama||'Kantin Uimsya Putri')}${dibuat?` · Web dibuat ${dibuat}`:''}</div><div>${contact}</div>`;
   }
 
   /* ── Shell: dock bertingkat, tab atas, pencarian perintah, tema ───────────── */
@@ -1275,7 +1343,7 @@
     $('#userTable tbody').innerHTML=roles.map(r=>{
       const isSelf=r.user_id===myId,isActive=r.is_active!==false;
       return`<tr class="${isActive?'':'row-inactive'}">
-        <td><b>${esc(r.username)}</b>${isSelf?' <span class="pill" style="background:rgba(99,102,241,.2);color:#a5b4fc">Anda</span>':''}</td>
+        <td><b>${esc(r.username)}</b>${r.email?`<div class="muted" style="font-size:11px">${esc(r.email)}</div>`:'<div class="muted" style="font-size:11px">akun username (lama)</div>'}${isSelf?' <span class="pill" style="background:rgba(99,102,241,.2);color:#a5b4fc">Anda</span>':''}</td>
         <td><span class="role-tag ${r.role}">${r.role==='admin'?'👑 Admin':'👤 Kasir'}</span></td>
         <td><span class="status ${isActive?'ok':'bad'}">${isActive?'Aktif':'Nonaktif'}</span></td>
         <td>${r.created_at?new Date(r.created_at).toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'}):'-'}</td>
@@ -1298,8 +1366,11 @@
     const adminEmail=state.session.user.email;
     formModal('👤 Buat Pengguna Baru',
     `<div class="form-grid cols-1">
-      <label>Username <small class="muted" style="font-weight:400">(huruf kecil, angka, underscore/strip)</small>
-        <input type="text" name="username" pattern="[a-z0-9_-]+" required placeholder="contoh: kasir1">
+      <label>Email pengguna <small class="muted" style="font-weight:400">(email asli — dipakai untuk login & reset password)</small>
+        <input type="email" name="email" required autocomplete="off" placeholder="contoh: nama@gmail.com">
+      </label>
+      <label>Nama tampilan <small class="muted" style="font-weight:400">(opsional, bawaan: bagian depan email)</small>
+        <input type="text" name="username" maxlength="30" autocomplete="off" placeholder="contoh: Budi">
       </label>
       <label>Password Pengguna Baru <small class="muted" style="font-weight:400">(minimal 8 karakter)</small>
         <input type="password" name="password" minlength="8" required placeholder="Minimal 8 karakter">
@@ -1315,28 +1386,29 @@
       </label>
     </div>
     <div style="height:1px;background:rgba(255,255,255,.1);margin:16px 0"></div>
+    <div class="notice" style="margin:0 0 12px">ℹ️ Jika <b>Confirm email</b> aktif di Supabase, pengguna harus mengeklik tautan konfirmasi di emailnya sebelum bisa login.</div>
     <div class="notice warn" style="margin-bottom:12px">🔐 Konfirmasi identitas: masukkan password login Anda sendiri.</div>
     <label>Password Admin Anda
       <input type="password" name="admin_password" required placeholder="Password login Anda saat ini">
     </label>`,
     async f=>{
-      const username=String(f.get('username')).toLowerCase().trim();
+      const email=String(f.get('email')||'').toLowerCase().trim();
+      const username=(String(f.get('username')||'').trim()||email.split('@')[0]).slice(0,30);
       const password=String(f.get('password'));
       const password2=String(f.get('password2'));
       const role=String(f.get('role'));
       const adminPwd=String(f.get('admin_password'));
 
-      if(!username||!/^[a-z0-9_-]+$/.test(username))throw new Error('Username tidak valid. Gunakan huruf kecil, angka, underscore, atau strip saja.');
+      if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))throw new Error('Format email tidak valid.');
       if(password.length<8)throw new Error('Password baru minimal 8 karakter.');
       if(password!==password2)throw new Error('Konfirmasi password tidak cocok.');
       if(!adminPwd)throw new Error('Password admin wajib diisi untuk konfirmasi.');
-      if(state.userRoles.find(r=>r.username===username))throw new Error(`Username "${username}" sudah digunakan. Pilih username lain.`);
-
-      const email=username+'@kantin-uimsya.local';
+      if(state.userRoles.find(r=>String(r.email||'').toLowerCase()===email))throw new Error(`Email "${email}" sudah terdaftar sebagai pengguna.`);
 
       // Buat akun baru via signUp
       const {data:signUpData,error:signUpErr}=await db.auth.signUp({email,password});
-      if(signUpErr)throw new Error('Gagal membuat akun: '+signUpErr.message+'. Pastikan Email Confirm dinonaktifkan di Supabase Auth.');
+      if(signUpErr)throw new Error('Gagal membuat akun: '+signUpErr.message);
+      if(Array.isArray(signUpData.user?.identities)&&signUpData.user.identities.length===0)throw new Error('Email ini sudah terdaftar di sistem. Gunakan email lain.');
 
       const newUserId=signUpData.user?.id;
       if(!newUserId)throw new Error('Gagal mendapatkan ID pengguna baru. Coba lagi.');
@@ -1350,13 +1422,13 @@
       }
 
       // Insert role record sebagai admin
-      const {error:roleErr}=await db.from('kantin_user_roles').insert({
-        user_id:newUserId,username,role,is_active:true,created_by:state.session.user.id
+      const {error:roleErr}=await insertRole({
+        user_id:newUserId,username,role,is_active:true,email,created_by:state.session.user.id
       });
       if(roleErr)throw new Error('Akun Auth berhasil dibuat tapi gagal menyimpan role: '+roleErr.message);
 
       // Update local state
-      state.userRoles.push({user_id:newUserId,username,role,is_active:true,created_at:new Date().toISOString(),created_by:state.session.user.id});
+      state.userRoles.push({user_id:newUserId,username,role,is_active:true,email,created_at:new Date().toISOString(),created_by:state.session.user.id});
       renderUsers();
       // toast dipanggil oleh formModal
     });
@@ -1424,7 +1496,7 @@
       ['renderDaily',renderDaily],['renderReceivables',renderReceivables],
       ['renderPayables',renderPayables],['renderStock',renderStock],
       ['renderSuppliers',renderSuppliers],['renderSavings',renderSavings],
-      ['renderNotes',renderNotes]
+      ['renderNotes',renderNotes],['renderBiodata',renderBiodata]
     ];
     for(const [name,fn] of renders){
       try{fn();}catch(e){console.warn(`[render] ${name} error:`,e);}
@@ -1493,7 +1565,8 @@
 
     $('#refreshBtn').onclick=()=>{const rb=$('#refreshBtn');rb.classList.add('spin');refresh().then(()=>toast('Data diperbarui.')).catch(e=>toast(e.message,true)).finally(()=>rb.classList.remove('spin'));};
     $('#ctaAdd').onclick=()=>openTransaction();
-    initTheme();buildDock();renderChrome(state.tab);initCommand();
+    initTheme();buildDock();renderChrome(state.tab);initCommand();renderFooter();
+    $('#editBiodata').onclick=biodataModal;
     $('#logoutBtn').onclick=()=>forceLogout('');
 
     if(isAdmin()){

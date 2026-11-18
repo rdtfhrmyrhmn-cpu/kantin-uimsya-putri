@@ -36,6 +36,12 @@
     :root[data-theme="light"] .msg{color:#be123c}:root[data-theme="light"] .msg.warn{color:#92400e}
     .foot{text-align:center;color:var(--muted);font-size:12px;margin-top:18px;line-height:1.55}
     .theme{position:absolute;top:14px;right:14px;width:32px;height:32px;border-radius:10px;border:1px solid var(--edge);background:rgba(255,255,255,.08);color:var(--text);cursor:pointer;font-size:14px}
+    .linkish{background:none;border:0;padding:0;color:#a5b4fc;font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+    :root[data-theme="light"] .linkish{color:#4f46e5}
+    .row-end{display:flex;justify-content:flex-end;margin:-6px 0 12px}
+    .msg.ok{background:rgba(16,185,129,.16);color:#6ee7b7;border-color:rgba(16,185,129,.3)}:root[data-theme="light"] .msg.ok{color:#047857}
+    .dev{text-align:center;color:var(--muted);font-size:11.5px;margin-top:10px;line-height:1.6}.dev a{color:var(--text2)}
+    .hide{display:none!important}
   </style>
 </head>
 <body>
@@ -46,27 +52,36 @@
     <div class="eyebrow">SISTEM KEUANGAN</div>
     <h1>Kantin Uimsya Putri</h1><div class="sub">Sistem Keuangan & Operasional Kantin</div>
     <div class="msg" id="preMsg"></div>
+
     <form id="loginForm">
-      <div class="field"><label for="username">Username</label><input id="username" autocomplete="username" placeholder="Masukkan username" required></div>
+      <div class="field"><label for="username">Email atau username</label><input id="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="nama@email.com" required></div>
       <div class="field"><label for="password">Password</label><div class="wrap"><input id="password" type="password" autocomplete="current-password" placeholder="Masukkan password" required><button type="button" class="toggle" id="toggle">👁</button></div></div>
+      <div class="row-end"><button type="button" class="linkish" id="forgotBtn">Lupa password?</button></div>
       <button class="submit" id="loginBtn" type="submit">Masuk</button>
       <div class="msg" id="loginMsg"></div>
     </form>
-    <div class="foot">Login menggunakan username. Admin dapat membuat akun pengguna dari dalam aplikasi.</div>
+
+    <form id="recForm" class="hide">
+      <div class="field"><label for="newPass">Password baru <span style="font-weight:400">(minimal 8 karakter)</span></label><input id="newPass" type="password" autocomplete="new-password" minlength="8" required placeholder="Password baru"></div>
+      <div class="field"><label for="newPass2">Ulangi password baru</label><input id="newPass2" type="password" autocomplete="new-password" minlength="8" required placeholder="Ulangi password baru"></div>
+      <button class="submit" id="recBtn" type="submit">Simpan password baru</button>
+      <div class="msg" id="recMsg"></div>
+    </form>
+
+    <div class="foot" id="loginFoot">Masuk dengan email atau username Anda. Admin membuat akun pengguna dari dalam aplikasi.</div>
+    <div class="dev" id="devLine"></div>
   </section></main>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase.js"></script>
+  <script src="site-config.js"></script>
   <script>
   (()=>{
-    const form=document.getElementById('loginForm'),
-          u=document.getElementById('username'),
-          p=document.getElementById('password'),
-          b=document.getElementById('loginBtn'),
-          m=document.getElementById('loginMsg'),
-          pre=document.getElementById('preMsg');
+    const $=id=>document.getElementById(id);
+    const form=$('loginForm'),rec=$('recForm'),u=$('username'),p=$('password'),b=$('loginBtn'),m=$('loginMsg'),pre=$('preMsg');
+    const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
-    // Tampilkan pesan error dari URL param (redirect dari app)
+    // Pesan error dari URL (redirect dari aplikasi)
     const params=new URLSearchParams(location.search);
     const errMap={
       no_access:'⚠️ Akun Anda belum memiliki akses. Hubungi admin untuk mendapatkan akses.',
@@ -76,34 +91,89 @@
     };
     const SESSION_MS=60*60*1000,LOGIN_KEY='kantin_login_at';
     const preErr=params.get('error');
-    if(preErr&&errMap[preErr]){pre.textContent=errMap[preErr];pre.className='msg warn show';}
+    const say=(el,t,cls)=>{el.textContent=t;el.className='msg show'+(cls?' '+cls:'');};
+    if(preErr&&errMap[preErr])say(pre,errMap[preErr],'warn');
 
-    document.getElementById('themeBtn').onclick=()=>{const t=document.documentElement.dataset.theme==='light'?'dark':'light';document.documentElement.dataset.theme=t;try{localStorage.setItem('kantin_theme',t)}catch(e){}};
-    document.getElementById('toggle').onclick=()=>{
-      const v=p.type==='password';
-      p.type=v?'text':'password';
-      document.getElementById('toggle').textContent=v?'🙈':'👁';
+    $('themeBtn').onclick=()=>{const t=document.documentElement.dataset.theme==='light'?'dark':'light';document.documentElement.dataset.theme=t;try{localStorage.setItem('kantin_theme',t)}catch(e){}};
+    $('toggle').onclick=()=>{const v=p.type==='password';p.type=v?'text':'password';$('toggle').textContent=v?'🙈':'👁';};
+
+    // Footer pengembang (data dari site-config.js)
+    (()=>{
+      const C=window.KANTIN_SITE||{},P=C.programmer||{};
+      const bits=[];
+      if(C.dibuat){const d=new Date(C.dibuat+'T00:00:00');if(!isNaN(d))bits.push('Web dibuat '+d.toLocaleDateString('id-ID',{day:'numeric',month:'long',year:'numeric'}));}
+      if(P.nama)bits.push('Programmer: '+esc(P.nama));
+      $('devLine').innerHTML=bits.join(' · ');
+    })();
+
+    // Email asli dipakai apa adanya; username lama dipetakan ke email internal
+    const toEmail=raw=>{
+      const v=String(raw||'').trim().toLowerCase();
+      if(v.includes('@'))return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)?v:'';
+      const clean=v.replace(/[^a-z0-9._-]/g,'');
+      return clean?clean+'@kantin-uimsya.local':'';
     };
 
-    const show=t=>{m.textContent=t;m.className='msg show'};
+    const isRecovery=/(^|[#&])type=recovery(&|$)/.test(location.hash.replace(/^#/,'').replace(/^\?/,''));
 
-    // Sesi hanya sah jika masih dalam 1 jam sejak login; selebihnya dikeluarkan otomatis
-    supabaseClient.auth.getSession().then(async({data})=>{
-      if(!data.session)return;
-      const at=+localStorage.getItem(LOGIN_KEY)||0;
-      if(at&&Date.now()-at<SESSION_MS){location.replace('app.html');return;}
-      try{localStorage.removeItem(LOGIN_KEY);}catch(e){}
-      await supabaseClient.auth.signOut().catch(()=>{});
-      if(at&&!preErr){pre.textContent=errMap.session_timeout;pre.className='msg warn show';}
-    }).catch(()=>{});
+    if(isRecovery){
+      // Tautan reset password dari email: tampilkan form password baru
+      form.classList.add('hide');rec.classList.remove('hide');$('loginFoot').classList.add('hide');
+      say(pre,'Buat password baru untuk akun Anda.','ok');
+      rec.addEventListener('submit',async e=>{
+        e.preventDefault();
+        const a=$('newPass').value,c=$('newPass2').value,rm=$('recMsg'),rb=$('recBtn');
+        if(a.length<8)return say(rm,'Password minimal 8 karakter.');
+        if(a!==c)return say(rm,'Konfirmasi password tidak cocok.');
+        rb.disabled=true;rb.textContent='Menyimpan...';rm.className='msg';
+        try{
+          await supabaseClient.auth.getSession(); // pastikan sesi pemulihan dari tautan sudah terbaca
+          const {error}=await supabaseClient.auth.updateUser({password:a});
+          if(error)throw error;
+          await supabaseClient.auth.signOut().catch(()=>{});
+          try{localStorage.removeItem(LOGIN_KEY);}catch(e){}
+          history.replaceState(null,'',location.pathname);
+          rec.classList.add('hide');form.classList.remove('hide');$('loginFoot').classList.remove('hide');
+          say(pre,'✅ Password berhasil diubah. Silakan masuk dengan password baru.','ok');
+        }catch(err){
+          console.error(err);
+          say(rm,'Gagal mengubah password: '+(err.message||'tautan mungkin sudah kedaluwarsa. Minta tautan baru.'));
+        }finally{rb.disabled=false;rb.textContent='Simpan password baru';}
+      });
+    }else{
+      // Sesi hanya sah dalam 1 jam sejak login; selebihnya dikeluarkan otomatis
+      supabaseClient.auth.getSession().then(async({data})=>{
+        if(!data.session)return;
+        const at=+localStorage.getItem(LOGIN_KEY)||0;
+        if(at&&Date.now()-at<SESSION_MS){location.replace('app.html');return;}
+        try{localStorage.removeItem(LOGIN_KEY);}catch(e){}
+        await supabaseClient.auth.signOut().catch(()=>{});
+        if(at&&!preErr)say(pre,errMap.session_timeout,'warn');
+      }).catch(()=>{});
+    }
+
+    // Lupa password: kirim tautan reset ke email
+    let coolUntil=0;
+    $('forgotBtn').onclick=async()=>{
+      const v=u.value.trim().toLowerCase();
+      if(!v.includes('@'))return say(m,'Isi kolom di atas dengan EMAIL Anda, lalu klik "Lupa password?" lagi. (Akun berbasis username: hubungi admin untuk reset.)','warn');
+      const email=toEmail(v);if(!email)return say(m,'Format email tidak valid.');
+      if(Date.now()<coolUntil)return say(m,'Tunggu sebentar sebelum meminta tautan lagi.','warn');
+      coolUntil=Date.now()+60000;
+      try{
+        const {error}=await supabaseClient.auth.resetPasswordForEmail(email,{redirectTo:location.origin+location.pathname});
+        if(error)throw error;
+      }catch(err){console.error(err);}
+      // Pesan netral: tidak membocorkan apakah email terdaftar
+      say(m,'Jika email tersebut terdaftar, tautan untuk membuat password baru telah dikirim. Periksa kotak masuk dan folder spam.','ok');
+    };
 
     form.addEventListener('submit',async e=>{
       e.preventDefault();
-      const username=u.value.trim(),password=p.value;
-      if(!username||!password)return show('Username dan password wajib diisi.');
-      const clean=username.toLowerCase().replace(/[^a-z0-9._-]/g,'');
-      if(!clean)return show('Username tidak valid.');
-      const email=clean+'@kantin-uimsya.local';
+      const password=p.value;
+      if(!u.value.trim()||!password)return say(m,'Email/username dan password wajib diisi.');
+      const email=toEmail(u.value);
+      if(!email)return say(m,u.value.includes('@')?'Format email tidak valid.':'Email atau username tidak valid.');
       b.disabled=true;b.textContent='Memeriksa...';m.className='msg';
       try{
         const {error}=await supabaseClient.auth.signInWithPassword({email,password});
@@ -112,7 +182,8 @@
         location.replace('app.html');
       }catch(err){
         console.error(err);
-        show('Login gagal: '+(err.message||'Kredensial tidak sesuai.'));
+        const raw=String(err.message||'');
+        say(m,/confirm/i.test(raw)?'Email belum dikonfirmasi. Buka email Anda dan klik tautan konfirmasi dari Supabase.':'Login gagal: '+(raw||'Kredensial tidak sesuai.'));
       }finally{
         b.disabled=false;b.textContent='Masuk';
       }
