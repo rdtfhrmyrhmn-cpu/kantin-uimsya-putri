@@ -10,9 +10,9 @@ window.KANTIN_SITE = {
 
   // Kontak programmer (tampil di footer). Isi yang ada saja.
   programmer: {
-    nama: 'Raditia Fahri Mayrahman',        // contoh: 'Nama Anda'
-    whatsapp: '082331763384',    // contoh: '0812-3456-7890'
-    email: 'rdtfhrmyrhmn@gmail.com',       // contoh: 'nama@email.com'
+    nama: '',        // contoh: 'Nama Anda'
+    whatsapp: '',    // contoh: '0812-3456-7890'
+    email: '',       // contoh: 'nama@email.com'
     instagram: '',   // contoh: 'namaanda' (tanpa @)
     website: ''      // contoh: 'https://namaanda.com'
   },

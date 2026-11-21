@@ -19,7 +19,7 @@
     report:null,
     editId:null,
     opening:Number(localStorage.getItem('kantin_opening_balance')||0),
-    role:null,          // 'admin' | 'kasir'
+    role:null,          // 'admin' | 'kasir' | 'pengawas'
     userRoles:[]        // array dari kantin_user_roles
   };
 
@@ -47,6 +47,10 @@
   /* ── Role helpers ────────────────────────────────────────────────────────── */
   const isAdmin=()=>state.role==='admin';
   const canDelete=()=>state.role==='admin';
+  const canWrite=()=>state.role==='admin'||state.role==='kasir';   // pengawas = hanya lihat
+  const ROLE_INFO={admin:{icon:'👑',label:'Admin'},kasir:{icon:'👤',label:'Kasir'},pengawas:{icon:'👁️',label:'Pengawas'}};
+  const roleTag=r=>{const i=ROLE_INFO[r]||ROLE_INFO.kasir;return`<span class="role-tag ${ROLE_INFO[r]?r:'kasir'}">${i.icon} ${i.label}</span>`;};
+  const VIEW_ONLY_MSG='Peran Pengawas hanya dapat melihat data.';
 
   /* ── Auth & Role ─────────────────────────────────────────────────────────── */
   /* Batas sesi: login hanya berlaku 1 jam sejak masuk, lalu keluar otomatis. */
@@ -91,7 +95,7 @@
   }
   async function loadUserRole(){
     const userId=state.session.user.id;
-    const {data:allRoles,error}=await db.from('kantin_user_roles').select('*');
+    let {data:allRoles,error}=await db.from('kantin_user_roles').select('*');
 
     if(error){
       // Tabel belum ada (setup awal) — anggap admin
@@ -102,7 +106,23 @@
     }
 
     state.userRoles=allRoles||[];
-    const myRole=allRoles?.find(r=>r.user_id===userId);
+    let myRole=allRoles?.find(r=>r.user_id===userId);
+    let redeemMsg='';
+
+    /* Pendaftaran dengan kode: bila akun baru belum punya role, tukar kode yang dibawa saat mendaftar. */
+    if(!myRole){
+      const code=state.session.user.user_metadata?.invite_code;
+      if(code){
+        const {error:rErr}=await db.rpc('kantin_redeem_invite',{p_code:code});
+        if(rErr){console.warn('Penukaran kode gagal:',rErr.message);redeemMsg='Kode pendaftaran tidak dapat dipakai: '+rErr.message;}
+        else{
+          db.auth.updateUser({data:{invite_code:null}}).catch(()=>{});
+          const again=await db.from('kantin_user_roles').select('*');
+          allRoles=again.data||[];state.userRoles=allRoles;myRole=allRoles.find(r=>r.user_id===userId);
+          if(myRole)setTimeout(()=>toast('Pendaftaran berhasil. Selamat datang!'),600);
+        }
+      }
+    }
 
     if(!myRole){
       const hasAdmin=allRoles?.some(r=>r.role==='admin'&&r.is_active!==false);
@@ -122,7 +142,7 @@
       if(boot){
         /* admin pertama sudah dibuat */
       }else{
-        toast('Akun Anda belum memiliki akses. Hubungi admin.',true);
+        toast(redeemMsg||'Akun Anda belum memiliki akses. Hubungi admin.',true);
         setTimeout(()=>forceLogout('no_access'),2500);
         return false;
       }
@@ -143,10 +163,11 @@
     const me=(state.userRoles||[]).find(r=>r.user_id===state.session.user.id);
     const uname=me?.username||state.session.user.email?.split('@')[0]||'Pengguna';
     const el=$('#userLabel');
-    if(el) el.innerHTML=`${esc(uname)} <span class="role-tag ${admin?'admin':'kasir'}">${admin?'👑 Admin':'👤 Kasir'}</span>`;
+    if(el) el.innerHTML=`${esc(uname)} ${roleTag(state.role)}`;
+    document.body.classList.toggle('role-pengawas',state.role==='pengawas');
     // Profil di pengaturan
     const su=$('#settingsUser');
-    if(su) su.textContent=uname+(admin?' (Admin)':' (Kasir)');
+    if(su) su.textContent=uname+' ('+(ROLE_INFO[state.role]?.label||'Kasir')+')';
     // Menu Pengguna (admin only)
     window.kantinUserName=uname.charAt(0).toUpperCase()+uname.slice(1);
     if(window.updateHomeClock)window.updateHomeClock();
@@ -170,6 +191,7 @@
   }
   const byType=t=>state.rows.filter(r=>r.tipe===t);
   async function writeRow(tgl,tipe,payload,recordId){
+    if(!canWrite())throw new Error(VIEW_ONLY_MSG);
     const rid=recordId||`${tipe}:${uid()}`;
     const {error}=await db.from('kantin_data').upsert({record_id:rid,tipe,tgl,data:payload,updated_at:new Date().toISOString()},{onConflict:'record_id'});
     if(error)throw error;
@@ -340,10 +362,12 @@
     let list=[],sel=0;
     const all=()=>[
       ...GROUPS.flatMap(g=>g.tabs.filter(tabAllowed).map(t=>({label:TAB_LABEL[t],sub:g.label,ic:TAB_ICON[t],run:()=>nav(t)}))),
-      {label:'Tambah pemasukan',sub:'Aksi',ic:'arrow-down-left',run:()=>openTransaction('pemasukan')},
-      {label:'Tambah pengeluaran',sub:'Aksi',ic:'arrow-up-right',run:()=>openTransaction('pengeluaran')},
-      {label:'Tarik tabungan',sub:'Aksi',ic:'piggy-bank',run:()=>withdrawModal()},
-      {label:'Catatan evaluasi baru',sub:'Aksi',ic:'notebook-pen',run:()=>{nav('catatan');noteModal(null,'keluhan');}}
+      ...(canWrite()?[
+        {label:'Tambah pemasukan',sub:'Aksi',ic:'arrow-down-left',run:()=>openTransaction('pemasukan')},
+        {label:'Tambah pengeluaran',sub:'Aksi',ic:'arrow-up-right',run:()=>openTransaction('pengeluaran')},
+        {label:'Tarik tabungan',sub:'Aksi',ic:'piggy-bank',run:()=>withdrawModal()},
+        {label:'Catatan evaluasi baru',sub:'Aksi',ic:'notebook-pen',run:()=>{nav('catatan');noteModal(null,'keluhan');}}
+      ]:[])
     ];
     const norm=x=>String(x||'').toLowerCase();
     const draw=()=>{
@@ -390,11 +414,12 @@
     if(tab==='pemasok')renderSuppliers();
     if(tab==='tabungan')renderSavings();
     if(tab==='laporan'&&state.report)renderReport(state.report);
-    if(tab==='pengguna'&&isAdmin())renderUsers();
+    if(tab==='pengguna'&&isAdmin()){renderUsers();loadInvites().then(renderInvites).catch(()=>{});}
   }
 
   /* ── Modals ──────────────────────────────────────────────────────────────── */
   function formModal(title,body,onSave){
+    if(!canWrite()){toast(VIEW_ONLY_MSG,true);return;}
     const root=$('#modalRoot');
     root.innerHTML=`<div class="modal-backdrop"><div class="modal"><div class="modal-head"><h3>${title}</h3><button class="x" id="closeModal">×</button></div><form id="modalForm" class="modal-body">${body}<div class="modal-actions"><button type="button" class="btn" id="cancelModal">Batal</button><button type="submit" class="primary" id="modalSaveBtn">Simpan</button></div></form></div></div>`;
     root.querySelector('#closeModal').onclick=closeModal;
@@ -907,7 +932,7 @@
       if(k==='keluhan'&&d.dari)meta.push(`Dari: <b>${esc(d.dari)}</b>`);
       if(k==='target'&&d.tenggat)meta.push(`Tenggat: <b>${esc(d.tenggat)}</b>`);
       if(k==='target'&&num(d.nominal)>0)meta.push(`Target: <b>${fmt(d.nominal)}</b>`);
-      const statusSel=K.statuses.length?`<select class="note-status" data-id="${r.id}" title="Ubah status">${K.statuses.map(st=>`<option${(d.status||K.statuses[0])===st?' selected':''}>${st}</option>`).join('')}</select>`:'';
+      const statusSel=K.statuses.length?`<select class="note-status" data-id="${r.id}" title="Ubah status"${canWrite()?'':' disabled'}>${K.statuses.map(st=>`<option${(d.status||K.statuses[0])===st?' selected':''}>${st}</option>`).join('')}</select>`:'';
       return`<article class="note k-${k}"><div class="note-top"><span class="note-tag">${K.icon} ${K.label.toUpperCase()}</span><small>${r.tgl}</small></div>
         <h4>${esc(d.judul||'(tanpa judul)')}</h4>${meta.map(m=>`<div class="note-meta">${m}</div>`).join('')}
         <div class="note-body">${esc(d.isi||'')}</div>
@@ -955,6 +980,7 @@
       await writeRow(f.get('tgl'),'catatan',payload,row?.record_id);
     });
     const root=$('#modalRoot'),jenisEl=root.querySelector('#noteJenis');
+    if(!jenisEl)return; /* formModal tidak tampil (mis. peran Pengawas) */
     const sync=()=>{
       const k=jenisEl.value,K=NOTE_KINDS[k]||NOTE_KINDS.lain,st=root.querySelector('#noteStatus');
       const keep=st.value||d.status||'';
@@ -1337,6 +1363,7 @@
       ['Total Pengguna',roles.length],
       ['Admin',roles.filter(r=>r.role==='admin').length],
       ['Kasir',roles.filter(r=>r.role==='kasir').length],
+      ['Pengawas',roles.filter(r=>r.role==='pengawas').length],
       ['Nonaktif',roles.filter(r=>r.is_active===false).length]
     ].map(([l,v])=>`<div class="stat"><span>${l}</span><strong>${v}</strong></div>`).join('');
 
@@ -1344,7 +1371,7 @@
       const isSelf=r.user_id===myId,isActive=r.is_active!==false;
       return`<tr class="${isActive?'':'row-inactive'}">
         <td><b>${esc(r.username)}</b>${r.email?`<div class="muted" style="font-size:11px">${esc(r.email)}</div>`:'<div class="muted" style="font-size:11px">akun username (lama)</div>'}${isSelf?' <span class="pill" style="background:rgba(99,102,241,.2);color:#a5b4fc">Anda</span>':''}</td>
-        <td><span class="role-tag ${r.role}">${r.role==='admin'?'👑 Admin':'👤 Kasir'}</span></td>
+        <td>${roleTag(r.role)}</td>
         <td><span class="status ${isActive?'ok':'bad'}">${isActive?'Aktif':'Nonaktif'}</span></td>
         <td>${r.created_at?new Date(r.created_at).toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'}):'-'}</td>
         <td><div class="row-actions">
@@ -1359,6 +1386,7 @@
 
     $$('#userTable .change-role').forEach(b=>b.onclick=()=>changeRoleModal(b.dataset.id,b.dataset.role,b.dataset.name));
     $$('#userTable .toggle-active').forEach(b=>b.onclick=()=>toggleUserActive(b.dataset.id,b.dataset.active==='true',b.dataset.name));
+    renderInvites();
   }
 
   function createUserModal(){
@@ -1381,6 +1409,7 @@
       <label>Role Akses
         <select name="role">
           <option value="kasir">👤 Kasir — tambah & edit data (tidak bisa hapus)</option>
+          <option value="pengawas">👁️ Pengawas — hanya melihat data</option>
           <option value="admin">👑 Admin — akses penuh termasuk hapus data</option>
         </select>
       </label>
@@ -1448,20 +1477,86 @@
     toast(`Akun "${username}" berhasil ${currentlyActive?'dinonaktifkan':'diaktifkan'}.`);
   }
 
+  const ROLE_DESC={admin:'Akses penuh: tambah, edit, hapus data, kelola pengguna & kode pendaftaran.',kasir:'Tambah dan edit data. Tidak bisa menghapus atau mengelola pengguna.',pengawas:'Hanya melihat data dan mencetak laporan. Tidak bisa menambah, mengubah, atau menghapus.'};
   function changeRoleModal(userId,currentRole,username){
-    const newRole=currentRole==='admin'?'kasir':'admin';
-    const msg=currentRole==='admin'
-      ?`Ubah role "${username}" dari Admin → Kasir?\n\nMereka akan kehilangan kemampuan menghapus data dan mengelola pengguna.`
-      :`Ubah role "${username}" dari Kasir → Admin?\n\nMereka akan mendapat akses penuh termasuk hapus data dan kelola pengguna.`;
-    if(!confirm(msg))return;
-    db.from('kantin_user_roles').update({role:newRole}).eq('user_id',userId)
-      .then(({error})=>{
-        if(error)return toast('Gagal mengubah role: '+error.message,true);
-        const idx=state.userRoles.findIndex(r=>r.user_id===userId);
-        if(idx!==-1)state.userRoles[idx].role=newRole;
-        renderUsers();
-        toast(`Role "${username}" berhasil diubah menjadi ${newRole==='admin'?'Admin':'Kasir'}.`);
-      });
+    formModal('Ganti Role — '+esc(username),`<div class="form-grid cols-1">
+      <label>Role baru<select name="role" id="newRoleSel">${Object.entries(ROLE_INFO).map(([k,v])=>`<option value="${k}"${k===currentRole?' selected':''}>${v.icon} ${v.label}</option>`).join('')}</select></label>
+      <div class="notice" id="roleDesc" style="margin:0">${ROLE_DESC[currentRole]||''}</div>
+    </div>`,async f=>{
+      const newRole=String(f.get('role'));
+      if(!ROLE_INFO[newRole])throw new Error('Role tidak valid.');
+      if(newRole===currentRole)throw new Error('Role tidak berubah.');
+      const {data:upd,error}=await db.from('kantin_user_roles').update({role:newRole}).eq('user_id',userId).select('user_id');
+      if(error)throw new Error('Gagal mengubah role: '+error.message);
+      if(!upd||!upd.length)throw new Error('Role tidak berubah (tidak ada izin).');
+      const idx=state.userRoles.findIndex(r=>r.user_id===userId);
+      if(idx!==-1)state.userRoles[idx].role=newRole;
+      renderUsers();
+    });
+    const sel=$('#modalRoot #newRoleSel');
+    if(sel)sel.onchange=()=>{$('#modalRoot #roleDesc').textContent=ROLE_DESC[sel.value]||'';};
+  }
+
+  /* ── Kode pendaftaran (admin / pusat) ────────────────────────────────────── */
+  async function loadInvites(){
+    if(!isAdmin())return;
+    const {data,error}=await db.from('kantin_invite_codes').select('*').order('created_at',{ascending:false});
+    state.invites=error?null:(data||[]);state.invitesErr=error?error.message:'';
+  }
+  const fmtDate=v=>v?new Date(v).toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'}):'-';
+  function inviteStatus(r){
+    if(r.used_at)return['','Dipakai'+(r.used_email?' · '+r.used_email:'')];
+    if(r.revoked)return['bad','Dicabut'];
+    if(new Date(r.expires_at)<=new Date())return['partial','Kedaluwarsa'];
+    return['ok','Aktif'];
+  }
+  function renderInvites(){
+    const tb=$('#inviteTable tbody');if(!tb||!isAdmin())return;
+    if(state.invites===undefined){tb.innerHTML='<tr><td colspan="6" class="empty">Memuat...</td></tr>';return;}
+    if(state.invites===null){tb.innerHTML=`<tr><td colspan="6" class="empty">Fitur kode belum aktif. Jalankan <b>database_update_v5.sql</b> di Supabase SQL Editor.<br><small>${esc(state.invitesErr||'')}</small></td></tr>`;return;}
+    tb.innerHTML=state.invites.map(r=>{
+      const [cls,txt]=inviteStatus(r),active=cls==='ok';
+      return`<tr><td><code>••••-••••-${esc(r.code_hint)}</code></td><td>${roleTag(r.role)}</td><td>${esc(r.note||'-')}</td><td>${fmtDate(r.created_at)}</td><td>${fmtDate(r.expires_at)}</td>
+        <td><span class="status ${cls}">${esc(txt)}</span>${active?` <button class="icon-btn danger-text revoke-invite" data-id="${r.id}">Cabut</button>`:''}</td></tr>`;
+    }).join('')||'<tr><td colspan="6" class="empty">Belum ada kode. Klik <b>Buat Kode Pendaftaran</b>.</td></tr>';
+    $$('#inviteTable .revoke-invite').forEach(b=>b.onclick=async()=>{
+      if(!confirm('Cabut kode ini? Kode yang dicabut tidak bisa dipakai lagi.'))return;
+      const {error}=await db.rpc('kantin_revoke_invite',{p_id:b.dataset.id});
+      if(error)return toast('Gagal mencabut kode: '+error.message,true);
+      await loadInvites();renderInvites();toast('Kode dicabut.');
+    });
+  }
+  function createInviteModal(){
+    formModal('🔑 Buat Kode Pendaftaran',`<div class="form-grid cols-2">
+      <label>Peran akun baru<select name="role"><option value="pengawas">👁️ Pengawas — hanya melihat</option><option value="kasir">👤 Kasir — tambah & edit data</option></select></label>
+      <label>Berlaku<select name="days"><option value="1">1 hari</option><option value="3">3 hari</option><option value="7" selected>7 hari</option><option value="14">14 hari</option><option value="30">30 hari</option></select></label>
+      <label class="full">Untuk siapa <small class="muted" style="font-weight:400">(catatan, opsional)</small><input name="note" maxlength="120" placeholder="Contoh: Pak Hasan — pengawas yayasan"></label>
+    </div>
+    <div class="notice" style="margin-top:14px">Kode berlaku <b>satu kali pakai</b> dan hanya ditampilkan <b>sekali</b> setelah dibuat. Kode asli tidak disimpan di database. Kode untuk Admin tidak tersedia; akun Admin dibuat lewat <b>Buat Pengguna</b>.</div>`,
+    async f=>{
+      const role=String(f.get('role')),days=+f.get('days');
+      const {data:code,error}=await db.rpc('kantin_create_invite',{p_role:role,p_days:days,p_note:String(f.get('note')||'').trim()||null});
+      if(error)throw new Error(error.message);
+      setTimeout(()=>showInviteCode(code,role,days),80);
+    });
+  }
+  async function copyText(t){
+    try{await navigator.clipboard.writeText(t);return true;}catch(e){
+      try{const ta=document.createElement('textarea');ta.value=t;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();const ok=document.execCommand('copy');ta.remove();return ok;}catch(_){return false;}
+    }
+  }
+  function showInviteCode(code,role,days){
+    const until=new Date(Date.now()+days*864e5).toLocaleDateString('id-ID',{day:'numeric',month:'long',year:'numeric'});
+    const msg=`Kode pendaftaran Kantin Uimsya Putri: ${code}\nPeran: ${ROLE_INFO[role].label} · sekali pakai · berlaku sampai ${until}\nCara daftar: buka ${location.origin}/ → klik "Daftar dengan kode" → isi email, password, dan kode ini.`;
+    $('#modalRoot').innerHTML=`<div class="modal-backdrop"><div class="modal" style="width:min(520px,100%)"><div class="modal-head"><h3>Kode Pendaftaran Dibuat</h3><button class="x" id="closeCode">×</button></div>
+      <div class="modal-body"><div class="invite-code" id="inviteCodeText">${esc(code)}</div>
+      <p class="muted" style="text-align:center;margin:8px 0 16px">${ROLE_INFO[role].icon} ${ROLE_INFO[role].label} · sekali pakai · berlaku sampai ${until}</p>
+      <div class="notice warn" style="margin:0 0 14px">⚠️ Salin sekarang. Kode ini <b>tidak akan ditampilkan lagi</b> setelah jendela ini ditutup.</div>
+      <div class="modal-actions" style="margin-top:0;justify-content:space-between"><button class="btn" id="copyCode">📋 Salin kode</button><button class="btn" id="copyMsg">💬 Salin pesan lengkap</button><button class="primary" id="doneCode">Selesai</button></div></div></div></div>`;
+    const done=()=>{closeModal();loadInvites().then(renderInvites);};
+    $('#closeCode').onclick=done;$('#doneCode').onclick=done;
+    $('#copyCode').onclick=async()=>toast(await copyText(code)?'Kode disalin.':'Gagal menyalin. Salin manual.');
+    $('#copyMsg').onclick=async()=>toast(await copyText(msg)?'Pesan disalin.':'Gagal menyalin. Salin manual.');
   }
 
   /* ── Utilities ───────────────────────────────────────────────────────────── */
@@ -1511,6 +1606,7 @@
       try{
         const {data}=await db.from('kantin_user_roles').select('*');
         if(data)state.userRoles=data;
+        await loadInvites();
       }catch(e){console.warn('[refresh] userRoles:',e);}
     }
     renderAll();
@@ -1531,6 +1627,7 @@
     $('#addSupplier').onclick=()=>supplierModal();
     $('#addWithdraw').onclick=withdrawModal;
     $('#createUserBtn').onclick=()=>createUserModal();
+    $('#createInviteBtn').onclick=()=>createInviteModal();
 
     $('#saveDaily').onclick=()=>saveDaily().catch(e=>toast(e.message,true));
     $('#dailyDate').value=isoToday();

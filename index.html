@@ -42,6 +42,8 @@
     .msg.ok{background:rgba(16,185,129,.16);color:#6ee7b7;border-color:rgba(16,185,129,.3)}:root[data-theme="light"] .msg.ok{color:#047857}
     .dev{text-align:center;color:var(--muted);font-size:11.5px;margin-top:10px;line-height:1.6}.dev a{color:var(--text2)}
     .hide{display:none!important}
+    .switch{text-align:center;margin-top:16px;font-size:13px;color:var(--text2)}
+    .codeinput{font-family:'Space Grotesk',ui-monospace,monospace;letter-spacing:.16em;text-align:center;font-weight:700;font-size:16px;text-transform:uppercase}
   </style>
 </head>
 <body>
@@ -59,6 +61,17 @@
       <div class="row-end"><button type="button" class="linkish" id="forgotBtn">Lupa password?</button></div>
       <button class="submit" id="loginBtn" type="submit">Masuk</button>
       <div class="msg" id="loginMsg"></div>
+      <div class="switch">Belum punya akun? <button type="button" class="linkish" id="showReg">Daftar dengan kode</button></div>
+    </form>
+
+    <form id="regForm" class="hide" autocomplete="off">
+      <div class="field"><label for="regEmail">Email</label><input id="regEmail" type="email" autocomplete="email" autocapitalize="none" spellcheck="false" placeholder="nama@email.com" required></div>
+      <div class="field"><label for="regPass">Password <span style="font-weight:400">(minimal 8 karakter)</span></label><input id="regPass" type="password" autocomplete="new-password" minlength="8" required placeholder="Buat password"></div>
+      <div class="field"><label for="regPass2">Ulangi password</label><input id="regPass2" type="password" autocomplete="new-password" minlength="8" required placeholder="Ulangi password"></div>
+      <div class="field"><label for="regCode">Kode pendaftaran <span style="font-weight:400">(dari pusat / admin)</span></label><input id="regCode" class="codeinput" type="text" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false" maxlength="14" placeholder="XXXX-XXXX-XXXX" required></div>
+      <button class="submit" id="regBtn" type="submit">Daftar</button>
+      <div class="msg" id="regMsg"></div>
+      <div class="switch">Sudah punya akun? <button type="button" class="linkish" id="showLogin">Masuk</button></div>
     </form>
 
     <form id="recForm" class="hide">
@@ -78,7 +91,7 @@
   <script>
   (()=>{
     const $=id=>document.getElementById(id);
-    const form=$('loginForm'),rec=$('recForm'),u=$('username'),p=$('password'),b=$('loginBtn'),m=$('loginMsg'),pre=$('preMsg');
+    const form=$('loginForm'),reg=$('regForm'),rec=$('recForm'),u=$('username'),p=$('password'),b=$('loginBtn'),m=$('loginMsg'),pre=$('preMsg');
     const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
     // Pesan error dari URL (redirect dari aplikasi)
@@ -114,11 +127,59 @@
       return clean?clean+'@kantin-uimsya.local':'';
     };
 
+    // ── Pendaftaran akun dengan kode dari pusat ──────────────────────────────
+    const normCode=v=>String(v||'').toUpperCase().replace(/[^0-9A-Z]/g,'').slice(0,12);
+    const fmtCode=v=>normCode(v).replace(/(.{4})(?=.)/g,'$1-');
+    const showForm=which=>{
+      form.classList.toggle('hide',which!=='login');reg.classList.toggle('hide',which!=='reg');
+      $('loginFoot').classList.toggle('hide',which==='reg');
+      pre.className='msg';m.className='msg';$('regMsg').className='msg';
+    };
+    $('showReg').onclick=()=>showForm('reg');
+    $('showLogin').onclick=()=>showForm('login');
+    $('regCode').addEventListener('input',e=>{e.target.value=fmtCode(e.target.value);});
+    reg.addEventListener('submit',async e=>{
+      e.preventDefault();
+      const rm=$('regMsg'),rb=$('regBtn');
+      const email=$('regEmail').value.trim().toLowerCase(),p1=$('regPass').value,p2=$('regPass2').value,code=normCode($('regCode').value);
+      if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return say(rm,'Format email tidak valid.');
+      if(p1.length<8)return say(rm,'Password minimal 8 karakter.');
+      if(p1!==p2)return say(rm,'Konfirmasi password tidak cocok.');
+      if(code.length!==12)return say(rm,'Kode pendaftaran harus 12 karakter (contoh: ABCD-1234-EF56).');
+      rb.disabled=true;rb.textContent='Memeriksa kode...';rm.className='msg';
+      try{
+        // 1) Kode divalidasi di server SEBELUM akun dibuat (tidak ada akun yatim bila kode salah)
+        const {data:ok,error:ce}=await supabaseClient.rpc('kantin_check_invite',{p_code:code});
+        if(ce)throw new Error(/function|schema cache|does not exist/i.test(ce.message||'')?'Fitur pendaftaran belum aktif di server. Hubungi admin.':ce.message);
+        if(!ok)return say(rm,'Kode tidak valid, sudah dipakai, atau kedaluwarsa. Minta kode baru dari pusat.');
+        // 2) Buat akun; kode dibawa di metadata agar tetap bisa ditukar setelah konfirmasi email
+        rb.textContent='Membuat akun...';
+        const {data,error}=await supabaseClient.auth.signUp({email,password:p1,options:{data:{invite_code:code},emailRedirectTo:location.origin+location.pathname}});
+        if(error)throw error;
+        if(Array.isArray(data.user?.identities)&&data.user.identities.length===0)return say(rm,'Email ini sudah terdaftar. Silakan masuk, atau gunakan "Lupa password?".','warn');
+        if(data.session){
+          // Konfirmasi email nonaktif: tukar kode sekarang
+          const {error:re}=await supabaseClient.rpc('kantin_redeem_invite',{p_code:code});
+          if(re)throw new Error(re.message);
+          await supabaseClient.auth.signOut().catch(()=>{});
+          showForm('login');$('username').value=email;
+          say(pre,'✅ Akun berhasil dibuat. Silakan masuk dengan email dan password Anda.','ok');
+        }else{
+          showForm('login');$('username').value=email;
+          say(pre,'✅ Akun dibuat. Buka email Anda dan klik tautan konfirmasi, lalu masuk. Akses aktif otomatis saat masuk pertama kali.','ok');
+        }
+        reg.reset();
+      }catch(err){
+        console.error(err);
+        say(rm,'Pendaftaran gagal: '+(err.message||'terjadi kesalahan.'));
+      }finally{rb.disabled=false;rb.textContent='Daftar';}
+    });
+
     const isRecovery=/(^|[#&])type=recovery(&|$)/.test(location.hash.replace(/^#/,'').replace(/^\?/,''));
 
     if(isRecovery){
       // Tautan reset password dari email: tampilkan form password baru
-      form.classList.add('hide');rec.classList.remove('hide');$('loginFoot').classList.add('hide');
+      form.classList.add('hide');reg.classList.add('hide');rec.classList.remove('hide');$('loginFoot').classList.add('hide');
       say(pre,'Buat password baru untuk akun Anda.','ok');
       rec.addEventListener('submit',async e=>{
         e.preventDefault();

@@ -51,6 +51,7 @@
       </header>
 
       <div class="page-scroll" id="pageScroll">
+        <div class="viewer-banner">👁️ Mode Pengawas — Anda hanya dapat melihat data dan mencetak laporan.</div>
     <!-- Beranda -->
     <section class="page active" id="tab-home">
       <div class="hero">
@@ -165,7 +166,7 @@
     <section class="page" id="tab-pengguna">
       <div class="section-head">
         <div><div class="eyebrow">ADMIN</div><h2>Manajemen Pengguna</h2><p class="muted">Kelola akun dan hak akses pengguna aplikasi.</p></div>
-        <button class="primary" id="createUserBtn">👤 Buat Pengguna</button>
+        <div class="toolbar"><button class="btn" id="createInviteBtn">🔑 Buat Kode Pendaftaran</button><button class="primary" id="createUserBtn">👤 Buat Pengguna</button></div>
       </div>
       <div class="stats" id="userStats"></div>
       <div class="card">
@@ -178,14 +179,23 @@
         </div>
       </div>
       <div class="card" style="margin-top:16px">
+        <div class="card-head"><h3>🔑 Kode Pendaftaran</h3><span class="muted" style="font-size:12px">Calon pengguna mendaftar sendiri di halaman login dengan kode ini</span></div>
+        <div class="table-wrap">
+          <table id="inviteTable">
+            <thead><tr><th>Kode</th><th>Peran</th><th>Untuk</th><th>Dibuat</th><th>Berlaku s.d.</th><th>Status</th></tr></thead>
+            <tbody><tr><td colspan="6" class="empty">Memuat...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card" style="margin-top:16px">
         <div class="card-head"><h3>ℹ️ Panduan Role</h3></div>
         <div class="kpi-list">
           <div><span>👑 Admin</span><b>Akses penuh — bisa tambah, edit, hapus data, kelola pengguna, reset data.</b></div>
           <div><span>👤 Kasir</span><b>Akses terbatas — bisa tambah & edit data. Tidak bisa hapus, tidak bisa kelola pengguna.</b></div>
+          <div><span>👁️ Pengawas</span><b>Hanya melihat data dan mencetak laporan. Tidak bisa menambah, mengubah, atau menghapus.</b></div>
         </div>
         <p class="muted" style="margin-top:12px;font-size:12px;line-height:1.6">
-          Akun baru dibuat dengan Supabase Auth. Konfirmasi email dinonaktifkan karena menggunakan email internal <code>@kantin-uimsya.local</code>.
-          Pastikan pengaturan <b>Email Confirm</b> di Supabase Auth sudah dinonaktifkan agar pembuatan akun berhasil.
+          Akun baru dapat dibuat admin lewat <b>Buat Pengguna</b>, atau mendaftar sendiri di halaman login memakai <b>Kode Pendaftaran</b> (satu kali pakai, ada masa berlaku). Akses hanya aktif bila akun terdaftar dan aktif di daftar ini.
         </p>
       </div>
     </section>
